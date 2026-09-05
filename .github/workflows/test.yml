@@ -18,3 +18,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+      - name: Validate Home Assistant app configuration
+        uses: frenck/action-app-linter@v2
+        with:
+          path: ./ha-chatgpt-diagnostics

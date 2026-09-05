@@ -29,6 +29,22 @@ const envSchema = z
     ALLOWED_ENTITIES: z.string().default(''),
     READ_ONLY: booleanFromString,
     ENABLE_LOGBOOK: booleanFromString,
+    ENABLE_ERROR_LOGS: booleanFromString,
+    DIAGNOSTICS_ADDON_URL: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z
+        .string()
+        .url()
+        .refine(
+          (value) => /^https?:\/\//i.test(value),
+          'DIAGNOSTICS_ADDON_URL must use HTTP or HTTPS',
+        )
+        .optional(),
+    ),
+    DIAGNOSTICS_ADDON_TOKEN: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      gatewayKeySchema.optional(),
+    ),
     LOG_LEVEL: logLevelSchema.default('info'),
     HOME_ASSISTANT_TIMEOUT_MS: z.coerce.number().int().min(100).max(120_000).default(10_000),
     HOME_ASSISTANT_SERVICE_TIMEOUT_MS: z.coerce
@@ -84,6 +100,23 @@ const envSchema = z
         path: ['ALLOWED_ENTITIES'],
         message: 'READ_ONLY=false requires a non-empty ALLOWED_ENTITIES allow-list.',
       });
+    }
+
+    if (value.ENABLE_ERROR_LOGS) {
+      if (!value.DIAGNOSTICS_ADDON_URL) {
+        context.addIssue({
+          code: 'custom',
+          path: ['DIAGNOSTICS_ADDON_URL'],
+          message: 'ENABLE_ERROR_LOGS=true requires DIAGNOSTICS_ADDON_URL.',
+        });
+      }
+      if (!value.DIAGNOSTICS_ADDON_TOKEN) {
+        context.addIssue({
+          code: 'custom',
+          path: ['DIAGNOSTICS_ADDON_TOKEN'],
+          message: 'ENABLE_ERROR_LOGS=true requires DIAGNOSTICS_ADDON_TOKEN.',
+        });
+      }
     }
 
     const asyncServiceDomains = parseCsv(value.ASYNC_SERVICE_DOMAINS);
@@ -168,6 +201,9 @@ export interface GatewayConfig {
   allowedEntities: ReadonlySet<string>;
   readOnly: boolean;
   logbookEnabled: boolean;
+  errorLogsEnabled: boolean;
+  diagnosticsAddonUrl?: string;
+  diagnosticsAddonToken?: string;
   logLevel: z.infer<typeof logLevelSchema>;
   homeAssistantTimeoutMs: number;
   homeAssistantServiceTimeoutMs: number;
@@ -232,6 +268,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig 
     allowedEntities: parseCsv(parsed.ALLOWED_ENTITIES),
     readOnly: parsed.READ_ONLY,
     logbookEnabled: parsed.ENABLE_LOGBOOK,
+    errorLogsEnabled: parsed.ENABLE_ERROR_LOGS,
+    diagnosticsAddonUrl: parsed.DIAGNOSTICS_ADDON_URL?.replace(/\/$/, ''),
+    diagnosticsAddonToken: parsed.DIAGNOSTICS_ADDON_TOKEN,
     logLevel: parsed.LOG_LEVEL,
     homeAssistantTimeoutMs: parsed.HOME_ASSISTANT_TIMEOUT_MS,
     homeAssistantServiceTimeoutMs: parsed.HOME_ASSISTANT_SERVICE_TIMEOUT_MS,

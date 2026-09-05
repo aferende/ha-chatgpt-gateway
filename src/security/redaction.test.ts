@@ -35,4 +35,13 @@ describe('redaction', () => {
       '2026-09-02 ERROR zigbee connection timeout',
     );
   });
+
+  it('redacts credential URLs, webhook paths, and sensitive query parameters', () => {
+    const input = 'ERROR https://user:pass@example.test/api/webhook/hook-secret?token=query-secret';
+    const output = redactSensitiveText(input);
+
+    expect(output).not.toContain('user:pass');
+    expect(output).not.toContain('hook-secret');
+    expect(output).not.toContain('query-secret');
+  });
 });

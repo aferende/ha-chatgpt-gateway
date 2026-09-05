@@ -47,6 +47,43 @@ describe('configuration', () => {
   it('defaults to trusting no reverse proxies', () => {
     const config = loadConfig({ ...commonEnv, GATEWAY_API_KEY: strongKey() });
     expect(config.trustedProxies).toEqual([]);
+    expect(config.errorLogsEnabled).toBe(false);
+  });
+
+  it('requires both companion settings only when error logs are enabled', () => {
+    const base = { ...commonEnv, GATEWAY_API_KEY: strongKey() };
+    expect(() => loadConfig({ ...base, ENABLE_ERROR_LOGS: 'true' })).toThrow(
+      /DIAGNOSTICS_ADDON_URL/,
+    );
+    expect(() =>
+      loadConfig({
+        ...base,
+        ENABLE_ERROR_LOGS: 'true',
+        DIAGNOSTICS_ADDON_URL: 'http://homeassistant.local:8099',
+      }),
+    ).toThrow(/DIAGNOSTICS_ADDON_TOKEN/);
+
+    const token = strongKey();
+    const config = loadConfig({
+      ...base,
+      ENABLE_ERROR_LOGS: 'true',
+      DIAGNOSTICS_ADDON_URL: 'http://homeassistant.local:8099/',
+      DIAGNOSTICS_ADDON_TOKEN: token,
+    });
+    expect(config.errorLogsEnabled).toBe(true);
+    expect(config.diagnosticsAddonUrl).toBe('http://homeassistant.local:8099');
+    expect(config.diagnosticsAddonToken).toBe(token);
+  });
+
+  it('accepts empty optional companion settings while disabled', () => {
+    expect(() =>
+      loadConfig({
+        ...commonEnv,
+        GATEWAY_API_KEY: strongKey(),
+        DIAGNOSTICS_ADDON_URL: '',
+        DIAGNOSTICS_ADDON_TOKEN: '',
+      }),
+    ).not.toThrow();
   });
 
   it('accepts explicit IPv4, IPv6, and CIDR trusted proxies', () => {

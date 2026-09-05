@@ -4,6 +4,7 @@
 
 - ChatGPT knows only one gateway credential: preferably `GATEWAY_WRITE_API_KEY`, or the backward-compatible `GATEWAY_API_KEY`.
 - HA ChatGPT Gateway knows gateway credentials and `HOME_ASSISTANT_TOKEN`.
+- The optional diagnostics companion knows its internal bearer token and receives a Supervisor token with the `homeassistant` role. The Internet-facing gateway never receives the Supervisor token.
 - Home Assistant never needs OpenAI credentials.
 - `HOME_ASSISTANT_TOKEN` must never be copied into a GPT Action.
 
@@ -57,3 +58,15 @@ An in-memory per-client rate limiter runs before authentication on every protect
 `TRUSTED_PROXIES` controls Fastify's native `trustProxy` setting. It is empty by default, so forwarded headers from a direct client are ignored and the socket peer remains the rate-limit identity. When an exact proxy peer IP or verified CIDR is configured, Fastify walks only that trusted forwarding chain and uses the first untrusted address as `request.ip`; both the general limiter and the credential-plus-client service limiter then use the real client address. A trusted proxy must set or preserve `X-Forwarded-For` correctly. Never configure universal trust, and do not trust a forwarded header merely because it arrived from the Internet.
 
 Fastify request logs contain request IDs, method, route, status, and duration. The application never logs the Home Assistant token, gateway key, or Authorization header; error responses are deliberately generic and do not include upstream response bodies.
+
+## Optional diagnostics companion
+
+Core error logs require the documented Supervisor `/core/logs` endpoint, which is unavailable to the normal Home Assistant REST API. Keeping that access in a separately installed app prevents the Internet-facing gateway from receiving Supervisor credentials and preserves normal gateway operation when diagnostics are absent.
+
+The companion requests `hassio_api: true` with `hassio_role: homeassistant`, the smallest documented role that authorizes `/core/logs`. Supervisor roles are coarse: this role also authorizes state-changing `/core/*` endpoints. The implementation reduces exposure by hard-coding one GET endpoint and never exposing a proxy, but a compromised companion process could misuse its Supervisor token. Keep protection mode enabled and install only reviewed images.
+
+The externally reachable companion surface is one token-protected, rate-limited route with a fixed source and bounded `lines` parameter. It keeps warning/error/critical/fatal records and their directly following continuation or traceback lines until a new record begins. Every retained line is redacted and remains subject to line, per-line, upstream-byte, and downstream-byte caps; an oversized traceback cannot bypass those limits. Tracebacks can disclose more context than one-line messages, so regex redaction remains incomplete defense in depth rather than the security boundary. Network isolation, authentication, fixed routing, bounds, and minimization are primary.
+
+The host port mapping is disabled by default. A Raspberry Pi gateway on another host requires an explicit LAN mapping; restrict it to that source with network firewalling where available. Never publish the companion through Home Assistant ingress, router forwarding, or Tailscale Funnel. Plain LAN HTTP does not protect the token from a network observer, so use an isolated trusted network or private encrypted overlay when needed.
+
+Companion lifecycle and request-result logs use English messages with ISO-8601 UTC timestamps. They contain metadata only: never bearer tokens, Authorization headers, Supervisor response bodies, or returned Core-log content.

@@ -15,6 +15,7 @@ function makeConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfig {
     allowedEntities: new Set<string>(),
     readOnly: true,
     logbookEnabled: true,
+    errorLogsEnabled: false,
     logLevel: 'silent',
     homeAssistantTimeoutMs: 10_000,
     homeAssistantServiceTimeoutMs: 30_000,

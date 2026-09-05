@@ -18,6 +18,7 @@ const entityIdParameter = {
 
 export interface OpenApiFeatureFlags {
   logbookEnabled?: boolean;
+  errorLogsEnabled?: boolean;
 }
 
 export function buildOpenApiSchema(publicBaseUrl?: string, features: OpenApiFeatureFlags = {}) {
@@ -61,7 +62,7 @@ export function buildOpenApiSchema(publicBaseUrl?: string, features: OpenApiFeat
                 operationId: 'getHomeAssistantLogbook',
                 summary: 'Get bounded Home Assistant logbook entries for allowed entities',
                 description:
-                  'Read Home Assistant logbook events for troubleshooting. This source is opt-in, authenticated, rate-limited, limited to 24 hours when unscoped and up to 7 days when scoped to an allowed entity_id, capped at 500 returned entries, filtered by gateway entity policy, redacted as defense-in-depth, and omits state values by default.',
+                  'Read Home Assistant logbook events for troubleshooting. This opt-in endpoint is authenticated and rate-limited, filters by gateway entity policy, returns at most 500 entries, allows 24 hours unscoped or 7 days for an allowed entity_id, redacts data, and omits state values by default.',
                 parameters: [
                   {
                     name: 'start_time',
@@ -103,6 +104,58 @@ export function buildOpenApiSchema(publicBaseUrl?: string, features: OpenApiFeat
                 responses: {
                   '200': { description: 'Allowed redacted logbook entries' },
                   ...errorResponses,
+                },
+              },
+            },
+          }
+        : {}),
+      ...(features.errorLogsEnabled
+        ? {
+            '/api/v1/logs/errors': {
+              get: {
+                operationId: 'getHomeAssistantErrorLogs',
+                summary: 'Get bounded Home Assistant Core warning and error records',
+                description:
+                  'Read Home Assistant Core warning/error records and bounded traceback context through the optional diagnostics companion. The authenticated, rate-limited endpoint accepts 1 to 500 recent source lines and applies best-effort secret redaction.',
+                parameters: [
+                  {
+                    name: 'lines',
+                    in: 'query',
+                    schema: { type: 'integer', minimum: 1, maximum: 500, default: 100 },
+                  },
+                ],
+                responses: {
+                  ...errorResponses,
+                  '200': {
+                    description: 'Redacted Home Assistant Core warning/error records and context',
+                    content: {
+                      'application/json': {
+                        schema: {
+                          type: 'object',
+                          properties: {
+                            source: { type: 'string', const: 'home_assistant_core' },
+                            requested_lines: { type: 'integer', minimum: 1, maximum: 500 },
+                            returned_lines: { type: 'integer', minimum: 0, maximum: 500 },
+                            truncated: { type: 'boolean' },
+                            entries: {
+                              type: 'array',
+                              maxItems: 500,
+                              items: { type: 'string', maxLength: 24576 },
+                            },
+                          },
+                          required: [
+                            'source',
+                            'requested_lines',
+                            'returned_lines',
+                            'truncated',
+                            'entries',
+                          ],
+                        },
+                      },
+                    },
+                  },
+                  '502': { description: 'Diagnostics companion returned an unexpected response' },
+                  '503': { description: 'Diagnostics companion is unavailable or timed out' },
                 },
               },
             },

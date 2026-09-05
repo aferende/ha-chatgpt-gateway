@@ -135,6 +135,9 @@ All runtime configuration is provided through environment variables.
 - `ALLOWED_ENTITIES` — default: empty only while `READ_ONLY=true`. Exact comma-separated entity allow-list. The gateway refuses to start with `READ_ONLY=false` and an empty value.
 - `READ_ONLY` — default: `false`. When `true`, blocks service calls while keeping read operations available.
 - `ENABLE_LOGBOOK` — default: `false`. Opt-in access to bounded Home Assistant logbook events. Returned entries are filtered by the existing domain/entity policy; state values are omitted by default.
+- `ENABLE_ERROR_LOGS` — default: `false`. Registers the bounded error-log route only when the separate diagnostics companion is configured.
+- `DIAGNOSTICS_ADDON_URL` — required when error logs are enabled. Fixed base URL of the companion, for example `http://homeassistant.local:8099`.
+- `DIAGNOSTICS_ADDON_TOKEN` — required when error logs are enabled. A distinct 64-character hexadecimal bearer token shared only with the companion.
 - `ENABLE_ADMIN_ACTIONS` — default: `false`. Enables the separate, exact allow-list of target-less maintenance actions.
 - `ADMIN_ALLOWED_ACTIONS` — required when administration actions are enabled. Supported values are `homeassistant.check_config`, `homeassistant.reload_all`, `homeassistant.reload_core_config`, `homeassistant.reload_custom_templates`, `homeassistant.restart`, `automation.reload`, `scene.reload`, and `script.reload`.
 
@@ -160,6 +163,7 @@ GET  /openapi.json
 GET  /api/v1/config
 GET  /api/v1/diagnostics
 GET  /api/v1/logbook              # only when ENABLE_LOGBOOK=true
+GET  /api/v1/logs/errors           # only when ENABLE_ERROR_LOGS=true
 GET  /api/v1/services
 GET  /api/v1/services/{domain}/{service}
 GET  /api/v1/areas
@@ -297,6 +301,22 @@ Authorization: Bearer <GATEWAY_READ_API_KEY-or-GATEWAY_WRITE_API_KEY>
 
 Set `include_state=true` only when state values are required for the specific diagnosis. For normal entity state inspection, prefer the existing entity endpoints.
 
+## Error-log diagnostics companion
+
+Home Assistant Core logs are deliberately not fetched by the normal gateway. The optional companion app runs under Home Assistant Supervisor and exposes one authenticated operation: a bounded excerpt of recent Core warning/error records, including directly following traceback or continuation lines. It has no generic proxy, source selector, shell, Docker socket, or filesystem mount.
+
+The gateway route is absent from both runtime routing and OpenAPI unless all three settings are valid:
+
+```env
+ENABLE_ERROR_LOGS=true
+DIAGNOSTICS_ADDON_URL=http://homeassistant.local:8099
+DIAGNOSTICS_ADDON_TOKEN=<64-hex-token-shared-with-the-companion>
+```
+
+`GET /api/v1/logs/errors?lines=100` accepts `1..500`; `100` is the default. It selects warning/error/critical/fatal records and retains their bounded continuation context until a new log record begins. Every retained line is redacted and subject to line, per-line, and response-byte caps. Regex redaction cannot guarantee removal of every secret and remains defense in depth. Keep windows small and never expose the companion through Home Assistant ingress, a router, the Internet, or the gateway's Tailscale Funnel.
+
+Installation, permissions, network guidance, threat model, and a local test procedure are in [the diagnostics companion guide](ha-chatgpt-diagnostics/DOCS.md).
+
 ## Read-only mode
 
 For an initial deployment, start with:
@@ -417,12 +437,13 @@ Important properties include:
 - non-root container
 - read-only container filesystem
 - secrets omitted from diagnostics and logs
+- optional Core logs isolated in a separately installed, authenticated companion
 
 See [docs/security.md](docs/security.md).
 
 ## Project status
 
-`v0.5.0` adds opt-in asynchronous dispatch for long-running automations/scripts and an exact allow-list for selected Home Assistant maintenance actions. This branch additionally proposes opt-in, policy-filtered logbook access for troubleshooting. Parameterized and multi-device calls continue to use the structured `data` object and ordered batches. The public interface remains HTTPS/REST only; Home Assistant’s WebSocket API is used internally only for filtered area/device registry discovery.
+`v0.5.0` adds opt-in asynchronous dispatch for long-running automations/scripts and selected Home Assistant maintenance actions. The current main branch also includes opt-in, policy-filtered logbook access. The optional diagnostics companion proposed here adds bounded Home Assistant Core warning/error logs without giving the normal gateway Supervisor access.
 
 ## License
 

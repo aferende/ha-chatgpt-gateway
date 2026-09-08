@@ -45,6 +45,7 @@ On mobile, tap an image to open it at full resolution.
 - Live per-service contracts with fields, examples, and selectors from Home Assistant
 - Area and device discovery scoped to allowed entities
 - Optional bounded Home Assistant logbook access for troubleshooting
+- Optional isolated diagnostics companion for bounded Home Assistant Core warning/error logs
 - GPT Action-friendly generic service calls and controlled multi-step batches
 - Domain and entity allow-lists
 - Optional read-only mode
@@ -362,6 +363,7 @@ See [docs/chatgpt-action.md](docs/chatgpt-action.md).
 - [NAS / Synology Docker deployment example](docs/nas-docker.md)
 - [Reverse proxy, HTTPS, and router port forwarding](docs/reverse-proxy.md)
 - [ChatGPT GPT and Action configuration](docs/chatgpt-action.md)
+- [Diagnostics companion installation and threat model](ha-chatgpt-diagnostics/DOCS.md)
 - [One-prompt Codex deployment assistant](docs/codex-deployment-prompt.md)
 - [Security model and safe rollout](docs/security.md)
 
@@ -443,7 +445,7 @@ See [docs/security.md](docs/security.md).
 
 ## Project status
 
-`v0.5.0` adds opt-in asynchronous dispatch for long-running automations/scripts and selected Home Assistant maintenance actions. The current main branch also includes opt-in, policy-filtered logbook access. The optional diagnostics companion proposed here adds bounded Home Assistant Core warning/error logs without giving the normal gateway Supervisor access.
+`v0.5.0` adds opt-in asynchronous dispatch for long-running automations/scripts and selected Home Assistant maintenance actions. The current main branch also includes opt-in, policy-filtered logbook access and the optional diagnostics companion for bounded Home Assistant Core warning/error logs, while keeping Supervisor credentials out of the Internet-facing gateway.
 
 ## License
 

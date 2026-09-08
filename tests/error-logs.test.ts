@@ -68,6 +68,7 @@ describe('gateway error log route', () => {
     expect(url.pathname).toBe('/api/v1/logs/errors');
     expect(url.searchParams.get('lines')).toBe('100');
     expect(init.method).toBe('GET');
+    expect(init.redirect).toBe('error');
     expect(init.headers).toEqual({ authorization: `Bearer ${DIAGNOSTICS_TOKEN}` });
     await app.close();
   });

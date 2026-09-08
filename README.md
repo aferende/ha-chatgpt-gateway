@@ -136,7 +136,7 @@ All runtime configuration is provided through environment variables.
 - `READ_ONLY` — default: `false`. When `true`, blocks service calls while keeping read operations available.
 - `ENABLE_LOGBOOK` — default: `false`. Opt-in access to bounded Home Assistant logbook events. Returned entries are filtered by the existing domain/entity policy; state values are omitted by default.
 - `ENABLE_ERROR_LOGS` — default: `false`. Registers the bounded error-log route only when the separate diagnostics companion is configured.
-- `DIAGNOSTICS_ADDON_URL` — required when error logs are enabled. Fixed base URL of the companion, for example `http://homeassistant.local:8099`.
+- `DIAGNOSTICS_ADDON_URL` — required when error logs are enabled. Fixed HTTP(S) base URL of the companion on a trusted LAN or private overlay, for example `http://homeassistant.local:8099`. Public Internet endpoints, Tailscale Funnel, router forwarding, credentials/userinfo, query strings, and fragments are not supported. Structural validation cannot prove that a hostname is private; the administrator must ensure the target is private and trusted.
 - `DIAGNOSTICS_ADDON_TOKEN` — required when error logs are enabled. A distinct 64-character hexadecimal bearer token shared only with the companion.
 - `ENABLE_ADMIN_ACTIONS` — default: `false`. Enables the separate, exact allow-list of target-less maintenance actions.
 - `ADMIN_ALLOWED_ACTIONS` — required when administration actions are enabled. Supported values are `homeassistant.check_config`, `homeassistant.reload_all`, `homeassistant.reload_core_config`, `homeassistant.reload_custom_templates`, `homeassistant.restart`, `automation.reload`, `scene.reload`, and `script.reload`.
@@ -313,7 +313,7 @@ DIAGNOSTICS_ADDON_URL=http://homeassistant.local:8099
 DIAGNOSTICS_ADDON_TOKEN=<64-hex-token-shared-with-the-companion>
 ```
 
-`GET /api/v1/logs/errors?lines=100` accepts `1..500`; `100` is the default. It selects warning/error/critical/fatal records and retains their bounded continuation context until a new log record begins. Every retained line is redacted and subject to line, per-line, and response-byte caps. Regex redaction cannot guarantee removal of every secret and remains defense in depth. Keep windows small and never expose the companion through Home Assistant ingress, a router, the Internet, or the gateway's Tailscale Funnel.
+`GET /api/v1/logs/errors?lines=100` accepts `1..500`; `100` is the default. It selects warning/error/critical/fatal records and retains their bounded continuation context until a new log record begins. Every retained line is redacted and subject to line, per-line, and response-byte caps. Regex redaction cannot guarantee removal of every secret and remains defense in depth. `DIAGNOSTICS_ADDON_URL` must point only to the companion on a trusted LAN or private overlay. Public Internet endpoints, Tailscale Funnel, router forwarding, URLs containing credentials/userinfo, query strings, and fragments are not supported. The structural URL validation does not technically block every public hostname; the administrator is responsible for ensuring that the configured target is private and trusted.
 
 Installation, permissions, network guidance, threat model, and a local test procedure are in [the diagnostics companion guide](ha-chatgpt-diagnostics/DOCS.md).
 

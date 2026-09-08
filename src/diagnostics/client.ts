@@ -75,6 +75,7 @@ export class DiagnosticsAddonClient {
     try {
       response = await this.fetchImpl(url, {
         method: 'GET',
+        redirect: 'error',
         headers: { authorization: `Bearer ${this.config.diagnosticsAddonToken}` },
         signal: AbortSignal.timeout(Math.min(this.config.homeAssistantTimeoutMs, 30_000)),
       });

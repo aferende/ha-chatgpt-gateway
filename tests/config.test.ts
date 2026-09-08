@@ -86,6 +86,40 @@ describe('configuration', () => {
     ).not.toThrow();
   });
 
+  it.each([
+    'http://homeassistant.local:8099',
+    'http://192.168.1.10:8099',
+    'https://example.ts.net:8099',
+  ])('accepts a structurally safe diagnostics companion URL: %s', (diagnosticsAddonUrl) => {
+    expect(() =>
+      loadConfig({
+        ...commonEnv,
+        GATEWAY_API_KEY: strongKey(),
+        ENABLE_ERROR_LOGS: 'true',
+        DIAGNOSTICS_ADDON_URL: diagnosticsAddonUrl,
+        DIAGNOSTICS_ADDON_TOKEN: strongKey(),
+      }),
+    ).not.toThrow();
+  });
+
+  it.each([
+    'http://user:pass@homeassistant.local:8099',
+    'http://user@homeassistant.local:8099',
+    'http://homeassistant.local:8099?x=1',
+    'http://homeassistant.local:8099#x',
+    'ftp://homeassistant.local:8099',
+  ])('rejects an unsafe diagnostics companion URL: %s', (diagnosticsAddonUrl) => {
+    expect(() =>
+      loadConfig({
+        ...commonEnv,
+        GATEWAY_API_KEY: strongKey(),
+        ENABLE_ERROR_LOGS: 'true',
+        DIAGNOSTICS_ADDON_URL: diagnosticsAddonUrl,
+        DIAGNOSTICS_ADDON_TOKEN: strongKey(),
+      }),
+    ).toThrow(/DIAGNOSTICS_ADDON_URL/);
+  });
+
   it('accepts explicit IPv4, IPv6, and CIDR trusted proxies', () => {
     const config = loadConfig({
       ...commonEnv,

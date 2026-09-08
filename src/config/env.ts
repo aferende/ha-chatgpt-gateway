@@ -39,6 +39,10 @@ const envSchema = z
           (value) => /^https?:\/\//i.test(value),
           'DIAGNOSTICS_ADDON_URL must use HTTP or HTTPS',
         )
+        .refine((value) => {
+          const url = new URL(value);
+          return !url.username && !url.password && !value.includes('?') && !value.includes('#');
+        }, 'DIAGNOSTICS_ADDON_URL must not include credentials, a query string, or a fragment')
         .optional(),
     ),
     DIAGNOSTICS_ADDON_TOKEN: z.preprocess(

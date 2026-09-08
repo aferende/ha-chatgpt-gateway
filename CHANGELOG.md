@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Adds an optional Home Assistant diagnostics companion and an opt-in gateway route for bounded, redacted Home Assistant Core warning/error lines.
+- Keeps bounded traceback and continuation context with selected warning/error records.
+
+### Security
+
+- Keeps Supervisor credentials out of the Internet-facing gateway and exposes no generic Supervisor, filesystem, shell, or log-source proxy.
+- Applies the existing redaction and response bounds to every retained traceback line.
+
+### Fixed
+
+- Keeps optional Logbook and Core-error-log OpenAPI operation descriptions within ChatGPT's 300-character import limit and adds regression coverage.
+
 ## v0.5.0 — Long-running automations and opt-in administration
 
 ### Added

@@ -18,6 +18,8 @@ export function makeConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfi
     allowedDomains: new Set(['light', 'switch']),
     allowedEntities: new Set(),
     readOnly: false,
+    logbookEnabled: false,
+    errorLogsEnabled: false,
     logLevel: 'silent',
     homeAssistantTimeoutMs: 10_000,
     homeAssistantServiceTimeoutMs: 30_000,

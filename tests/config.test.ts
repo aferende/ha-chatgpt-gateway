@@ -47,6 +47,77 @@ describe('configuration', () => {
   it('defaults to trusting no reverse proxies', () => {
     const config = loadConfig({ ...commonEnv, GATEWAY_API_KEY: strongKey() });
     expect(config.trustedProxies).toEqual([]);
+    expect(config.errorLogsEnabled).toBe(false);
+  });
+
+  it('requires both companion settings only when error logs are enabled', () => {
+    const base = { ...commonEnv, GATEWAY_API_KEY: strongKey() };
+    expect(() => loadConfig({ ...base, ENABLE_ERROR_LOGS: 'true' })).toThrow(
+      /DIAGNOSTICS_ADDON_URL/,
+    );
+    expect(() =>
+      loadConfig({
+        ...base,
+        ENABLE_ERROR_LOGS: 'true',
+        DIAGNOSTICS_ADDON_URL: 'http://homeassistant.local:8099',
+      }),
+    ).toThrow(/DIAGNOSTICS_ADDON_TOKEN/);
+
+    const token = strongKey();
+    const config = loadConfig({
+      ...base,
+      ENABLE_ERROR_LOGS: 'true',
+      DIAGNOSTICS_ADDON_URL: 'http://homeassistant.local:8099/',
+      DIAGNOSTICS_ADDON_TOKEN: token,
+    });
+    expect(config.errorLogsEnabled).toBe(true);
+    expect(config.diagnosticsAddonUrl).toBe('http://homeassistant.local:8099');
+    expect(config.diagnosticsAddonToken).toBe(token);
+  });
+
+  it('accepts empty optional companion settings while disabled', () => {
+    expect(() =>
+      loadConfig({
+        ...commonEnv,
+        GATEWAY_API_KEY: strongKey(),
+        DIAGNOSTICS_ADDON_URL: '',
+        DIAGNOSTICS_ADDON_TOKEN: '',
+      }),
+    ).not.toThrow();
+  });
+
+  it.each([
+    'http://homeassistant.local:8099',
+    'http://192.168.1.10:8099',
+    'https://example.ts.net:8099',
+  ])('accepts a structurally safe diagnostics companion URL: %s', (diagnosticsAddonUrl) => {
+    expect(() =>
+      loadConfig({
+        ...commonEnv,
+        GATEWAY_API_KEY: strongKey(),
+        ENABLE_ERROR_LOGS: 'true',
+        DIAGNOSTICS_ADDON_URL: diagnosticsAddonUrl,
+        DIAGNOSTICS_ADDON_TOKEN: strongKey(),
+      }),
+    ).not.toThrow();
+  });
+
+  it.each([
+    'http://user:pass@homeassistant.local:8099',
+    'http://user@homeassistant.local:8099',
+    'http://homeassistant.local:8099?x=1',
+    'http://homeassistant.local:8099#x',
+    'ftp://homeassistant.local:8099',
+  ])('rejects an unsafe diagnostics companion URL: %s', (diagnosticsAddonUrl) => {
+    expect(() =>
+      loadConfig({
+        ...commonEnv,
+        GATEWAY_API_KEY: strongKey(),
+        ENABLE_ERROR_LOGS: 'true',
+        DIAGNOSTICS_ADDON_URL: diagnosticsAddonUrl,
+        DIAGNOSTICS_ADDON_TOKEN: strongKey(),
+      }),
+    ).toThrow(/DIAGNOSTICS_ADDON_URL/);
   });
 
   it('accepts explicit IPv4, IPv6, and CIDR trusted proxies', () => {

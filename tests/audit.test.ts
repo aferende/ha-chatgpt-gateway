@@ -121,16 +121,16 @@ describe('privacy-preserving request audit', () => {
       (event) => event.rate_limits as Array<Record<string, unknown>>,
     );
     expect(rates[0]?.[0]).toMatchObject({
-      scope: 'gateway_authenticated',
-      decision: 'allowed',
-      count: 1,
-      remaining: 0,
+      rate_limit_scope: 'gateway_authenticated',
+      rate_limit_decision: 'allowed',
+      rate_limit_count: 1,
+      rate_limit_remaining: 0,
     });
     expect(rates[1]?.[0]).toMatchObject({
-      scope: 'gateway_authenticated',
-      decision: 'blocked',
-      count: 2,
-      remaining: 0,
+      rate_limit_scope: 'gateway_authenticated',
+      rate_limit_decision: 'blocked',
+      rate_limit_count: 2,
+      rate_limit_remaining: 0,
     });
   });
 

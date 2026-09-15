@@ -6,12 +6,12 @@ export type AuthenticationOutcome = 'missing' | 'malformed' | 'invalid' | 'authe
 export type RateLimitDecision = 'allowed' | 'blocked' | 'disabled';
 
 export interface RateLimitAuditMetadata {
-  scope: 'gateway_pre_auth' | 'gateway_authenticated' | 'gateway_service';
-  decision: RateLimitDecision;
-  limit: number;
-  count: number;
-  remaining: number;
-  reset_at?: string;
+  rate_limit_scope: 'gateway_pre_auth' | 'gateway_authenticated' | 'gateway_service';
+  rate_limit_decision: RateLimitDecision;
+  rate_limit_limit: number;
+  rate_limit_count: number;
+  rate_limit_remaining: number;
+  rate_limit_reset_at?: string;
 }
 
 interface GatewayAuditContext {

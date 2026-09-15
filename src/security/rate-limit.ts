@@ -60,7 +60,7 @@ export class InMemoryRateLimiter {
 function applyRateLimit(
   request: FastifyRequest,
   reply: FastifyReply,
-  scope: RateLimitAuditMetadata['scope'],
+  scope: RateLimitAuditMetadata['rate_limit_scope'],
   limit: number,
   limiter: InMemoryRateLimiter,
   key: string,
@@ -71,18 +71,27 @@ function applyRateLimit(
   reply.header(`${headerPrefix}-Remaining`, result.remaining);
   reply.header(`${headerPrefix}-Reset`, Math.ceil(result.resetAt / 1000));
   recordRateLimit(request, {
-    scope,
-    decision: result.decision,
-    limit,
-    count: result.count,
-    remaining: result.remaining,
-    reset_at: new Date(result.resetAt).toISOString(),
+    rate_limit_scope: scope,
+    rate_limit_decision: result.decision,
+    rate_limit_limit: limit,
+    rate_limit_count: result.count,
+    rate_limit_remaining: result.remaining,
+    rate_limit_reset_at: new Date(result.resetAt).toISOString(),
   });
   return result;
 }
 
-function recordDisabled(request: FastifyRequest, scope: RateLimitAuditMetadata['scope']): void {
-  recordRateLimit(request, { scope, decision: 'disabled', limit: 0, count: 0, remaining: 0 });
+function recordDisabled(
+  request: FastifyRequest,
+  scope: RateLimitAuditMetadata['rate_limit_scope'],
+): void {
+  recordRateLimit(request, {
+    rate_limit_scope: scope,
+    rate_limit_decision: 'disabled',
+    rate_limit_limit: 0,
+    rate_limit_count: 0,
+    rate_limit_remaining: 0,
+  });
 }
 
 /** Limits only failed authentication attempts, before any protected route handler runs. */

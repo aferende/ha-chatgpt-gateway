@@ -7,6 +7,11 @@ const booleanFromString = z
   .default('false')
   .transform((value) => value === 'true');
 
+const booleanDefaultTrueFromString = z
+  .enum(['true', 'false'])
+  .default('true')
+  .transform((value) => value === 'true');
+
 const logLevelSchema = z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']);
 
 const gatewayKeySchema = z
@@ -50,6 +55,12 @@ const envSchema = z
       gatewayKeySchema.optional(),
     ),
     LOG_LEVEL: logLevelSchema.default('info'),
+    AUDIT_LOG_ENABLED: booleanDefaultTrueFromString,
+    AUDIT_HMAC_KEY: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      gatewayKeySchema.optional(),
+    ),
+    AUDIT_LOG_RAW_IPS: booleanFromString,
     HOME_ASSISTANT_TIMEOUT_MS: z.coerce.number().int().min(100).max(120_000).default(10_000),
     HOME_ASSISTANT_SERVICE_TIMEOUT_MS: z.coerce
       .number()
@@ -209,6 +220,9 @@ export interface GatewayConfig {
   diagnosticsAddonUrl?: string;
   diagnosticsAddonToken?: string;
   logLevel: z.infer<typeof logLevelSchema>;
+  auditLogEnabled: boolean;
+  auditHmacKey?: string;
+  auditLogRawIps: boolean;
   homeAssistantTimeoutMs: number;
   homeAssistantServiceTimeoutMs: number;
   asyncServiceDispatchEnabled: boolean;
@@ -276,6 +290,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig 
     diagnosticsAddonUrl: parsed.DIAGNOSTICS_ADDON_URL?.replace(/\/$/, ''),
     diagnosticsAddonToken: parsed.DIAGNOSTICS_ADDON_TOKEN,
     logLevel: parsed.LOG_LEVEL,
+    auditLogEnabled: parsed.AUDIT_LOG_ENABLED,
+    auditHmacKey: parsed.AUDIT_HMAC_KEY,
+    auditLogRawIps: parsed.AUDIT_LOG_RAW_IPS,
     homeAssistantTimeoutMs: parsed.HOME_ASSISTANT_TIMEOUT_MS,
     homeAssistantServiceTimeoutMs: parsed.HOME_ASSISTANT_SERVICE_TIMEOUT_MS,
     asyncServiceDispatchEnabled: parsed.ENABLE_ASYNC_SERVICE_DISPATCH,

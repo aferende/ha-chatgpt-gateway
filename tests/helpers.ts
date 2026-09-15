@@ -21,6 +21,8 @@ export function makeConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfi
     logbookEnabled: false,
     errorLogsEnabled: false,
     logLevel: 'silent',
+    auditLogEnabled: false,
+    auditLogRawIps: false,
     homeAssistantTimeoutMs: 10_000,
     homeAssistantServiceTimeoutMs: 30_000,
     asyncServiceDispatchEnabled: false,

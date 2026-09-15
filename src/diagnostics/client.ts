@@ -63,7 +63,7 @@ export class DiagnosticsAddonClient {
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
-  async getErrorLogs(lines: number): Promise<DiagnosticsResponse> {
+  async getErrorLogs(lines: number, requestId: string): Promise<DiagnosticsResponse> {
     if (!this.config.diagnosticsAddonUrl || !this.config.diagnosticsAddonToken) {
       throw new DiagnosticsAddonError('unavailable');
     }
@@ -76,7 +76,10 @@ export class DiagnosticsAddonClient {
       response = await this.fetchImpl(url, {
         method: 'GET',
         redirect: 'error',
-        headers: { authorization: `Bearer ${this.config.diagnosticsAddonToken}` },
+        headers: {
+          authorization: `Bearer ${this.config.diagnosticsAddonToken}`,
+          'x-request-id': requestId,
+        },
         signal: AbortSignal.timeout(Math.min(this.config.homeAssistantTimeoutMs, 30_000)),
       });
     } catch {

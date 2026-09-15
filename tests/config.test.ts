@@ -48,6 +48,15 @@ describe('configuration', () => {
     const config = loadConfig({ ...commonEnv, GATEWAY_API_KEY: strongKey() });
     expect(config.trustedProxies).toEqual([]);
     expect(config.errorLogsEnabled).toBe(false);
+    expect(config.auditLogEnabled).toBe(true);
+    expect(config.auditLogRawIps).toBe(false);
+    expect(config.auditHmacKey).toBeUndefined();
+  });
+
+  it('accepts only a strong optional audit HMAC key', () => {
+    const base = { ...commonEnv, GATEWAY_API_KEY: strongKey() };
+    expect(loadConfig({ ...base, AUDIT_HMAC_KEY: strongKey() }).auditHmacKey).toHaveLength(64);
+    expect(() => loadConfig({ ...base, AUDIT_HMAC_KEY: 'short' })).toThrow(/64 hexadecimal/);
   });
 
   it('requires both companion settings only when error logs are enabled', () => {

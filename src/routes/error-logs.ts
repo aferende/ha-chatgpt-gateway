@@ -23,7 +23,7 @@ export async function registerErrorLogRoutes(
     }
 
     reply.header('Cache-Control', 'no-store');
-    const result = await client.getErrorLogs(queryResult.data.lines);
+    const result = await client.getErrorLogs(queryResult.data.lines, request.id);
     const entries = result.entries.map(redactSensitiveText);
     return { ...result, returned_lines: entries.length, entries };
   });

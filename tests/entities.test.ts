@@ -135,9 +135,12 @@ describe('entity routes', () => {
     await app.close();
   });
 
-  it('counts missing, malformed, invalid, and valid credentials in one general rate-limit bucket', async () => {
+  it('does not let failed authentication consume authenticated quota', async () => {
     const config = makeConfig({ rateLimitMax: 3, rateLimitWindowMs: 60_000 });
-    const app = await buildApp({ config, logger: false });
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () => jsonResponse(sampleStates));
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
 
     expect((await app.inject({ method: 'GET', url: '/api/v1/entities' })).statusCode).toBe(401);
     expect(
@@ -158,15 +161,18 @@ describe('entity routes', () => {
         })
       ).statusCode,
     ).toBe(401);
-    expect(
-      (
-        await app.inject({
-          method: 'GET',
-          url: '/api/v1/entities',
-          headers: { authorization: `Bearer ${config.gatewayApiKey}` },
-        })
-      ).statusCode,
-    ).toBe(429);
+    const validRequest = () =>
+      app.inject({
+        method: 'GET',
+        url: '/api/v1/entities',
+        headers: { authorization: `Bearer ${config.gatewayApiKey}` },
+      });
+    expect((await validRequest()).statusCode).toBe(200);
+    expect((await validRequest()).statusCode).toBe(200);
+    expect((await validRequest()).statusCode).toBe(200);
+    const blocked = await validRequest();
+    expect(blocked.statusCode).toBe(429);
+    expect(blocked.headers['retry-after']).toBeDefined();
     await app.close();
   });
 
@@ -184,6 +190,33 @@ describe('entity routes', () => {
     expect((await request()).statusCode).toBe(200);
     expect((await request()).statusCode).toBe(429);
     expect(fetchMock).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
+  it('keeps authenticated credential IDs in separate buckets', async () => {
+    const readKey = '1'.repeat(64);
+    const writeKey = '2'.repeat(64);
+    const config = makeConfig({
+      rateLimitMax: 1,
+      gatewayCredentials: [
+        { id: 'read', key: readKey, scopes: new Set(['read']) },
+        { id: 'write', key: writeKey, scopes: new Set(['read', 'write']) },
+      ],
+    });
+    const app = await buildApp({
+      config,
+      fetchImpl: vi.fn<typeof fetch>().mockImplementation(async () => jsonResponse(sampleStates)),
+      logger: false,
+    });
+    const request = (key: string) =>
+      app.inject({
+        method: 'GET',
+        url: '/api/v1/entities',
+        headers: { authorization: `Bearer ${key}` },
+      });
+    expect((await request(readKey)).statusCode).toBe(200);
+    expect((await request(readKey)).statusCode).toBe(429);
+    expect((await request(writeKey)).statusCode).toBe(200);
     await app.close();
   });
 

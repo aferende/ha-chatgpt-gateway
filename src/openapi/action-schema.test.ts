@@ -43,7 +43,9 @@ describe('diagnostic OpenAPI feature flags', () => {
       const route = schema.paths[path];
       const parameters = route && 'get' in route ? route.get.parameters : [];
       const startTime = parameters?.find((parameter) => parameter.name === 'start_time');
-      expect(startTime?.description).toContain('%2B');
+      expect(startTime && 'description' in startTime ? startTime.description : undefined).toContain(
+        '%2B',
+      );
     }
   });
 });

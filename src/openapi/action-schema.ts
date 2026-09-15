@@ -68,6 +68,8 @@ export function buildOpenApiSchema(publicBaseUrl?: string, features: OpenApiFeat
                     name: 'start_time',
                     in: 'query',
                     required: true,
+                    description:
+                      'ISO-8601 date-time. Percent-encode a positive offset plus sign as %2B in URLs.',
                     schema: {
                       type: 'string',
                       format: 'date-time',
@@ -77,6 +79,8 @@ export function buildOpenApiSchema(publicBaseUrl?: string, features: OpenApiFeat
                   {
                     name: 'end_time',
                     in: 'query',
+                    description:
+                      'ISO-8601 date-time. Percent-encode a positive offset plus sign as %2B in URLs.',
                     schema: {
                       type: 'string',
                       format: 'date-time',
@@ -240,11 +244,15 @@ export function buildOpenApiSchema(publicBaseUrl?: string, features: OpenApiFeat
               name: 'start_time',
               in: 'query',
               required: true,
+              description:
+                'ISO-8601 date-time. Percent-encode a positive offset plus sign as %2B in URLs (for example, 2026-09-15T07:40:00%2B02:00).',
               schema: { type: 'string', format: 'date-time', examples: ['2026-08-01T00:00:00Z'] },
             },
             {
               name: 'end_time',
               in: 'query',
+              description:
+                'ISO-8601 date-time. Percent-encode a positive offset plus sign as %2B in URLs.',
               schema: { type: 'string', format: 'date-time', examples: ['2026-08-08T00:00:00Z'] },
             },
             {

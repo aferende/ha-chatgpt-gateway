@@ -29,7 +29,13 @@ declare module 'fastify' {
 
 const sanitizeUserAgent = (value: string | undefined): string | undefined => {
   if (!value) return undefined;
-  return value.replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 200);
+  return [...value]
+    .filter((character) => {
+      const code = character.charCodeAt(0);
+      return code >= 32 && code !== 127;
+    })
+    .join('')
+    .slice(0, 200);
 };
 
 export function recordRateLimit(request: FastifyRequest, metadata: RateLimitAuditMetadata): void {

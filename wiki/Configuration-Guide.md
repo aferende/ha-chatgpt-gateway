@@ -99,12 +99,12 @@ Leave `TRUSTED_PROXIES` empty until you have verified the actual peer address se
 
 ## Rate limiting
 
-| Variable                       | Default | Purpose                                                                                         |
-| ------------------------------ | ------- | ----------------------------------------------------------------------------------------------- |
-| `RATE_LIMIT_MAX`               | `120`   | Maximum protected requests per source IP during the general rate-limit window. `0` disables it. |
-| `RATE_LIMIT_WINDOW_MS`         | `60000` | General limiter window in milliseconds.                                                         |
-| `SERVICE_RATE_LIMIT_MAX`       | `20`    | Stricter limit for service calls per authenticated credential and source IP.                    |
-| `SERVICE_RATE_LIMIT_WINDOW_MS` | `60000` | Service-call limiter window.                                                                    |
+| Variable                       | Default | Purpose                                                                                                       |
+| ------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------- |
+| `RATE_LIMIT_MAX`               | `120`   | Separate maximum for failed auth per client IP and authenticated work per credential + IP. `0` disables both. |
+| `RATE_LIMIT_WINDOW_MS`         | `60000` | General limiter window in milliseconds.                                                                       |
+| `SERVICE_RATE_LIMIT_MAX`       | `20`    | Stricter limit for service calls per authenticated credential and source IP.                                  |
+| `SERVICE_RATE_LIMIT_WINDOW_MS` | `60000` | Service-call limiter window.                                                                                  |
 
 Do not disable these limits unless another trusted limiter protects the endpoint.
 

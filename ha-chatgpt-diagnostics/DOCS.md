@@ -88,9 +88,15 @@ Do not reuse a Home Assistant token or the gateway API key. Paste the result
 into `diagnostics_token`, save it, and never post it in screenshots, chats,
 issues, or logs.
 
-| Option              | Required | Description                                                                |
-| ------------------- | -------- | -------------------------------------------------------------------------- |
-| `diagnostics_token` | Yes      | Exactly 64 hexadecimal characters; used only between gateway and companion |
+| Option              | Required | Description                                                                  |
+| ------------------- | -------- | ---------------------------------------------------------------------------- |
+| `diagnostics_token` | Yes      | Exactly 64 hexadecimal characters; used only between gateway and companion   |
+| `audit_hmac_key`    | No       | Independent 64-hex key for fingerprints stable across restarts               |
+| `audit_log_raw_ips` | No       | Default `false`; enable only briefly when raw source IPs are truly necessary |
+
+Generate `audit_hmac_key` independently from every bearer token. If it is left
+empty, the companion generates a random process-local key; fingerprints then
+remain stable only until restart. Neither key is ever included in audit output.
 
 ### 2. Map the network port
 
@@ -111,7 +117,7 @@ private overlay if this is unacceptable.
 Start the app and open **Protocol**. A successful start looks like this:
 
 ```text
-2026-09-05T07:45:12.123Z INFO Diagnostics app started version=0.1.10
+{"timestamp":"2026-09-05T07:45:12.123Z","level":"info","event":"startup_begin","message":"Diagnostics app started version=0.2.0","version":"0.2.0"}
 2026-09-05T07:45:12.137Z INFO Configuration loaded
 2026-09-05T07:45:12.140Z INFO Privileges dropped uid=1000 gid=1000
 2026-09-05T07:45:12.168Z INFO Diagnostics API listening host=0.0.0.0 port=8099

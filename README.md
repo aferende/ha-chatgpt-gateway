@@ -145,11 +145,16 @@ All runtime configuration is provided through environment variables.
 ### Logging and rate limits
 
 - `LOG_LEVEL` — default: `info`. Fastify/Pino log level.
-- `RATE_LIMIT_MAX` — default: `120`. Requests per source IP in the rate-limit window, including missing, malformed, and invalid authentication attempts; `0` disables the in-memory limiter.
+- `AUDIT_LOG_ENABLED` — default: `true`. Emits one structured, data-minimized completion event per protected request.
+- `AUDIT_HMAC_KEY` — optional independent 64-hex key for stable IP pseudonyms. If empty, a random process-local key is generated and fingerprints change after restart. Never derive it from an API key.
+- `AUDIT_LOG_RAW_IPS` — default: `false`. Adds raw client/peer IPs only when explicitly enabled for a time-bounded incident; this increases personal-data exposure.
+- `RATE_LIMIT_MAX` — default: `120`. Applied separately to failed authentication per resolved client IP and authenticated work per credential ID plus resolved client IP; `0` disables both process-local limiters.
 - `RATE_LIMIT_WINDOW_MS` — default: `60000`. Rate-limit window in milliseconds.
 - `SERVICE_RATE_LIMIT_MAX` — default: `20`. Stricter service-call limit per authenticated key and source IP; `0` disables it.
 - `SERVICE_RATE_LIMIT_WINDOW_MS` — default: `60000`. Service-call rate-limit window in milliseconds.
 - `TRUSTED_PROXIES` — default: empty (trust nobody). Comma-separated reverse-proxy peer IPs or CIDRs allowed to supply forwarding headers. Configure it only after verifying the peer address seen by the container; this preserves independent client rate-limit buckets behind a proxy without trusting headers sent directly by Internet clients.
+
+Rate-limit maps are bounded and reset on process restart. Failed authentication cannot consume an authenticated credential's quota. A shared proxy IP can still cause clients to share the failed-auth bucket when `TRUSTED_PROXIES` is absent or incorrect. See [Forensic observability](docs/forensic-observability.md) for fields, privacy, incident handling, and limitations.
 
 See `.env.example` for the complete template. An empty `ALLOWED_ENTITIES` value is appropriate only for a short, read-only discovery phase. A non-empty allow-list also prevents newly added Home Assistant entities from becoming available automatically.
 
@@ -272,6 +277,8 @@ The gateway exposes bounded, read-only analysis endpoints without becoming a gen
 
 To analyse an appliance's consumption, add its specific energy and power sensor IDs to `ALLOWED_ENTITIES` and permit the `sensor` domain. To inspect its schedule, add only the related `automation.*` IDs and permit `automation`. These endpoints are read-only; enabling a domain does not bypass the entity allow-list for service calls.
 
+In a URL, percent-encode the `+` in positive UTC offsets as `%2B`, for example `2026-09-15T07:40:00%2B02:00`. The gateway also tolerates a raw `+` for these two timestamp fields because form-style query parsing otherwise turns it into a space. `Z`, `+00:00`, positive offsets, and negative offsets are normalized to UTC after validation.
+
 ## Logbook troubleshooting
 
 Logbook access is intentionally disabled by default. Enable it explicitly:
@@ -281,6 +288,8 @@ ENABLE_LOGBOOK=true
 ```
 
 Then use `GET /api/v1/logbook` with a required ISO-8601 `start_time` and optional `end_time`, `entity_id`, `limit`, and `include_state` parameters.
+
+Positive offsets should use `%2B` in serialized URLs; the same narrow raw-`+` compatibility handling as History applies only to `start_time` and `end_time`.
 
 Security properties:
 
@@ -317,6 +326,8 @@ DIAGNOSTICS_ADDON_TOKEN=<64-hex-token-shared-with-the-companion>
 `GET /api/v1/logs/errors?lines=100` accepts `1..500`; `100` is the default. It selects warning/error/critical/fatal records and retains their bounded continuation context until a new log record begins. Every retained line is redacted and subject to line, per-line, and response-byte caps. Regex redaction cannot guarantee removal of every secret and remains defense in depth. `DIAGNOSTICS_ADDON_URL` must point only to the companion on a trusted LAN or private overlay. Public Internet endpoints, Tailscale Funnel, router forwarding, URLs containing credentials/userinfo, query strings, and fragments are not supported. The structural URL validation does not technically block every public hostname; the administrator is responsible for ensuring that the configured target is private and trusted.
 
 Installation, permissions, network guidance, threat model, and a local test procedure are in [the diagnostics companion guide](ha-chatgpt-diagnostics/DOCS.md).
+
+The gateway forwards its server-generated `X-Request-ID` to the companion so the two structured audit events can be correlated. Never expose the companion through Funnel, a router forward, or another public proxy.
 
 ## Read-only mode
 

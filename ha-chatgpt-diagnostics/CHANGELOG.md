@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0
+
+- Emit structured, privacy-preserving request completion events.
+- Separate failed-authentication and authenticated rate-limit buckets.
+- Correlate gateway and companion requests with a validated request ID.
+- Bound process-local limiter maps and document restart behavior.
+
 ## 0.1.10
 
 - Preserve bounded traceback and continuation context for selected warning,

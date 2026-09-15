@@ -1,7 +1,7 @@
 /* global AbortSignal, fetch */
 import { Buffer } from 'node:buffer';
 import console from 'node:console';
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import process from 'node:process';
@@ -14,6 +14,7 @@ const MAX_RESPONSE_BYTES = 1024 * 1024;
 const MAX_LINE_CHARS = 24_576;
 const MAX_REQUESTS = 30;
 const RATE_WINDOW_MS = 60_000;
+const MAX_RATE_LIMIT_BUCKETS = 1024;
 const REQUEST_TIMEOUT_MS = 10_000;
 const LOG_RECORD_PATTERN =
   /^(?:\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?\s+)?\[?(debug|info|notice|warning|warn|error|err|critical|fatal)\]?(?=\s|$)/i;
@@ -44,7 +45,13 @@ export function formatLogEvent(level, event, fields = {}, timestamp = new Date()
     shutdown_failed: 'Shutdown failed',
     startup_failed: `Startup failed category=${fields.category}`,
   };
-  return `${timestamp.toISOString()} ${level.toUpperCase()} ${messages[event] ?? event}`;
+  return JSON.stringify({
+    timestamp: timestamp.toISOString(),
+    level,
+    event,
+    message: messages[event] ?? event,
+    ...fields,
+  });
 }
 
 function logEvent(level, event, fields = {}) {
@@ -68,6 +75,51 @@ function secureTokenMatches(actual, expected) {
   const actualDigest = createHash('sha256').update(actual).digest();
   const expectedDigest = createHash('sha256').update(expected).digest();
   return timingSafeEqual(actualDigest, expectedDigest);
+}
+
+export class BoundedRateLimiter {
+  #entries = new Map();
+
+  constructor(
+    limit = MAX_REQUESTS,
+    windowMs = RATE_WINDOW_MS,
+    maxBuckets = MAX_RATE_LIMIT_BUCKETS,
+  ) {
+    this.limit = limit;
+    this.windowMs = windowMs;
+    this.maxBuckets = maxBuckets;
+  }
+
+  consume(key, now = Date.now()) {
+    let entry = this.#entries.get(key);
+    if (!entry || entry.resetAt <= now) {
+      if (!entry && this.#entries.size >= this.maxBuckets) this.cleanup(now);
+      if (!entry && this.#entries.size >= this.maxBuckets) {
+        this.#entries.delete(this.#entries.keys().next().value);
+      }
+      entry = { count: 0, resetAt: now + this.windowMs };
+    } else {
+      this.#entries.delete(key);
+    }
+    entry.count += 1;
+    this.#entries.set(key, entry);
+    return {
+      decision: entry.count > this.limit ? 'blocked' : 'allowed',
+      count: entry.count,
+      remaining: Math.max(0, this.limit - entry.count),
+      resetAt: entry.resetAt,
+    };
+  }
+
+  cleanup(now = Date.now()) {
+    for (const [key, entry] of this.#entries) {
+      if (entry.resetAt <= now) this.#entries.delete(key);
+    }
+  }
+
+  get size() {
+    return this.#entries.size;
+  }
 }
 
 function sendJson(response, statusCode, body, headers = {}) {
@@ -204,13 +256,23 @@ export function createDiagnosticsServer({
   supervisorToken,
   fetchImpl = fetch,
   logger = logEvent,
+  auditHmacKey,
+  auditLogRawIps = false,
 }) {
   if (!/^[a-f0-9]{64}$/i.test(diagnosticsToken)) {
     throw new Error('A 64-character hexadecimal diagnostics token is required');
   }
   if (!supervisorToken) throw new Error('Supervisor API access is unavailable');
 
-  const rateLimits = new Map();
+  if (auditHmacKey !== undefined && !/^[a-f0-9]{64}$/i.test(auditHmacKey)) {
+    throw new Error('A 64-character hexadecimal audit HMAC key is required when configured');
+  }
+  const hmacKey = auditHmacKey ? Buffer.from(auditHmacKey, 'hex') : randomBytes(32);
+  const fingerprint = (address) =>
+    createHmac('sha256', hmacKey).update(address).digest('hex').slice(0, 24);
+  const preAuthRateLimits = new BoundedRateLimiter();
+  const authenticatedRateLimits = new BoundedRateLimiter();
+
   return createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://localhost');
 
@@ -222,90 +284,107 @@ export function createDiagnosticsServer({
       return sendJson(response, 404, { error: 'not_found', message: 'Route not found.' });
     }
 
+    const startedAt = process.hrtime.bigint();
     const now = Date.now();
     const remoteAddress = request.socket.remoteAddress ?? 'unknown';
-    const existing = rateLimits.get(remoteAddress);
-    const rate =
-      !existing || existing.resetAt <= now ? { count: 0, resetAt: now + RATE_WINDOW_MS } : existing;
-    rate.count += 1;
-    rateLimits.set(remoteAddress, rate);
-    if (rateLimits.size > 1024) rateLimits.delete(rateLimits.keys().next().value);
+    const suppliedRequestId = request.headers['x-request-id'];
+    const requestId =
+      typeof suppliedRequestId === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        suppliedRequestId,
+      )
+        ? suppliedRequestId
+        : randomUUID();
+    const authorization = request.headers.authorization;
+    const match =
+      typeof authorization === 'string' ? /^Bearer ([^\s]+)$/i.exec(authorization) : null;
+    let authOutcome = authorization === undefined ? 'missing' : match ? 'invalid' : 'malformed';
+    if (match && secureTokenMatches(match[1], diagnosticsToken)) authOutcome = 'authenticated';
 
+    const limiter = authOutcome === 'authenticated' ? authenticatedRateLimits : preAuthRateLimits;
+    const rateScope =
+      authOutcome === 'authenticated' ? 'diagnostics_authenticated' : 'diagnostics_pre_auth';
+    const rate = limiter.consume(remoteAddress, now);
     const rateHeaders = {
       'ratelimit-limit': String(MAX_REQUESTS),
-      'ratelimit-remaining': String(Math.max(0, MAX_REQUESTS - rate.count)),
+      'ratelimit-remaining': String(rate.remaining),
       'ratelimit-reset': String(Math.ceil(rate.resetAt / 1000)),
     };
-    if (rate.count > MAX_REQUESTS) {
-      logger('warning', 'request_rate_limited');
-      return sendJson(
-        response,
+    const finish = (status, body, headers = {}, requestedLines) => {
+      const fields = {
+        request_id: requestId,
+        method: request.method,
+        route: '/api/v1/logs/errors',
+        status,
+        status_code: status,
+        duration_ms: Math.round(Number(process.hrtime.bigint() - startedAt) / 100_000) / 10,
+        source_fingerprint: fingerprint(remoteAddress),
+        auth_outcome: authOutcome,
+        rate_limit_scope: rateScope,
+        rate_limit_decision: rate.decision,
+        rate_limit_limit: MAX_REQUESTS,
+        rate_limit_count: rate.count,
+        rate_limit_remaining: rate.remaining,
+        rate_limit_reset_at: new Date(rate.resetAt).toISOString(),
+        ...(requestedLines === undefined ? {} : { requested_lines: requestedLines }),
+        ...(auditLogRawIps ? { source_ip: remoteAddress } : {}),
+      };
+      logger(
+        status === 401 || status === 429 || status >= 500 ? 'warning' : 'info',
+        'diagnostics_request_completed',
+        fields,
+      );
+      return sendJson(response, status, body, { ...rateHeaders, ...headers });
+    };
+
+    if (rate.decision === 'blocked') {
+      return finish(
         429,
         { error: 'rate_limited', message: 'Too many requests. Try again shortly.' },
-        { ...rateHeaders, 'retry-after': String(Math.ceil((rate.resetAt - now) / 1000)) },
+        { 'retry-after': String(Math.max(1, Math.ceil((rate.resetAt - now) / 1000))) },
       );
     }
-
-    const authorization = request.headers.authorization ?? '';
-    const prefix = 'Bearer ';
-    const suppliedToken = authorization.startsWith(prefix)
-      ? authorization.slice(prefix.length)
-      : '';
-    if (!secureTokenMatches(suppliedToken, diagnosticsToken)) {
-      logger('warning', 'authentication_failed');
-      return sendJson(
-        response,
-        401,
-        { error: 'unauthorized', message: 'Missing or invalid bearer token.' },
-        rateHeaders,
-      );
+    if (authOutcome !== 'authenticated') {
+      return finish(401, {
+        error: 'unauthorized',
+        message: 'Missing or invalid bearer token.',
+      });
     }
 
     if ([...url.searchParams.keys()].some((key) => key !== 'lines')) {
-      return sendJson(
-        response,
-        400,
-        { error: 'invalid_request', message: 'Only the lines query parameter is supported.' },
-        rateHeaders,
-      );
+      return finish(400, {
+        error: 'invalid_request',
+        message: 'Only the lines query parameter is supported.',
+      });
     }
     const lineValues = url.searchParams.getAll('lines');
     const rawLines = lineValues[0] ?? String(DEFAULT_LINES);
     if (lineValues.length > 1 || !/^[1-9]\d{0,2}$/.test(rawLines)) {
-      return sendJson(
-        response,
-        400,
-        { error: 'invalid_request', message: 'lines must be an integer from 1 to 500.' },
-        rateHeaders,
-      );
+      return finish(400, {
+        error: 'invalid_request',
+        message: 'lines must be an integer from 1 to 500.',
+      });
     }
     const lines = Number(rawLines);
     if (lines > MAX_LINES) {
-      return sendJson(
-        response,
-        400,
-        { error: 'invalid_request', message: 'lines must be an integer from 1 to 500.' },
-        rateHeaders,
-      );
+      return finish(400, {
+        error: 'invalid_request',
+        message: 'lines must be an integer from 1 to 500.',
+      });
     }
 
     try {
       const result = await fetchCoreErrorLogs({ lines, supervisorToken, fetchImpl });
-      logger('info', 'core_logs_returned', {
-        requested_lines: lines,
-        returned_lines: result.returned_lines,
-      });
-      return sendJson(response, 200, result, rateHeaders);
+      return finish(200, result, {}, lines);
     } catch {
-      logger('error', 'supervisor_request_failed');
-      return sendJson(
-        response,
+      return finish(
         503,
         {
           error: 'log_source_unavailable',
           message: 'The Home Assistant log source is unavailable.',
         },
-        rateHeaders,
+        {},
+        lines,
       );
     }
   });
@@ -326,6 +405,8 @@ async function main() {
   const server = createDiagnosticsServer({
     diagnosticsToken: options.diagnostics_token,
     supervisorToken: process.env.SUPERVISOR_TOKEN,
+    auditHmacKey: options.audit_hmac_key || undefined,
+    auditLogRawIps: options.audit_log_raw_ips === true,
   });
   await new Promise((resolve, reject) => {
     server.once('error', reject);

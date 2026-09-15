@@ -33,7 +33,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   const app = Fastify({
     logger: options.logger ?? { level: options.config.logLevel },
     genReqId: () => randomUUID(),
-    logController: { disableRequestLogging: true },
+    disableRequestLogging: true,
     bodyLimit: 1024 * 1024,
     trustProxy:
       options.config.trustedProxies.length > 0 ? [...options.config.trustedProxies] : false,

@@ -1,4 +1,5 @@
 import type { AddressInfo } from 'node:net';
+import { readFile } from 'node:fs/promises';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   BoundedRateLimiter,
@@ -43,6 +44,17 @@ async function fetchLogResult(logText: string, lines = 100) {
 }
 
 describe('diagnostics companion', () => {
+  it('keeps the image version aligned with the app configuration', async () => {
+    const [config, dockerfile] = await Promise.all([
+      readFile(new URL('../ha-chatgpt-diagnostics/config.yaml', import.meta.url), 'utf8'),
+      readFile(new URL('../ha-chatgpt-diagnostics/Dockerfile', import.meta.url), 'utf8'),
+    ]);
+    const version = config.match(/^version:\s*(\S+)$/m)?.[1];
+
+    expect(version).toBeDefined();
+    expect(dockerfile).toContain(`ARG BUILD_VERSION=${version}`);
+  });
+
   it('exposes health without authentication', async () => {
     const { baseUrl } = await startServer();
     const response = await fetch(`${baseUrl}/health`);

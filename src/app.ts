@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
+import Fastify, { LogController, type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import type { GatewayConfig } from './config/env.js';
 import { DiagnosticsAddonClient, DiagnosticsAddonError } from './diagnostics/client.js';
 import {
@@ -33,7 +33,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   const app = Fastify({
     logger: options.logger ?? { level: options.config.logLevel },
     genReqId: () => randomUUID(),
-    disableRequestLogging: true,
+    logController: new LogController({ disableRequestLogging: true }),
     bodyLimit: 1024 * 1024,
     trustProxy:
       options.config.trustedProxies.length > 0 ? [...options.config.trustedProxies] : false,

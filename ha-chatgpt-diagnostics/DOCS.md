@@ -117,16 +117,15 @@ private overlay if this is unacceptable.
 Start the app and open **Protocol**. A successful start looks like this:
 
 ```text
-2026-09-05 07:45:12.123 INFO Diagnostics app started version=0.2.2
+2026-09-05 07:45:12.123 INFO Diagnostics app started version=0.2.3
 2026-09-05 07:45:12.137 INFO Configuration loaded
 2026-09-05 07:45:12.140 INFO Privileges dropped uid=1000 gid=1000
 2026-09-05 07:45:12.168 INFO Diagnostics API listening host=0.0.0.0 port=8099
 ```
 
 Tokens, authorization headers, and returned Home Assistant log content are
-never written to this protocol. Lifecycle metadata uses compact English
-messages with human-readable UTC timestamps. Request audit events remain
-structured JSON with ISO-8601 UTC timestamps.
+never written to this protocol. Lifecycle and request audit metadata use
+compact English one-line messages with human-readable UTC timestamps.
 
 ## API reference
 

@@ -1,5 +1,5 @@
 name: HA ChatGPT Diagnostics
-version: 0.2.2
+version: 0.2.3
 slug: ha_chatgpt_diagnostics
 description: Bounded, read-only Home Assistant Core error logs for HA ChatGPT Gateway
 url: https://github.com/aferende/ha-chatgpt-gateway/tree/main/ha-chatgpt-diagnostics

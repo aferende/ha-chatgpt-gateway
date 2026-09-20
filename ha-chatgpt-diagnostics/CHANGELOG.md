@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.3
+
+- Render request audit events as compact human-readable one-line records while
+  preserving correlation, authentication, rate-limit, timing, and source
+  fingerprint metadata.
+
 ## 0.2.2
 
 - Display lifecycle timestamps as `YYYY-MM-DD HH:mm:ss.SSS` while retaining UTC

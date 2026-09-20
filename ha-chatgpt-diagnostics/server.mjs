@@ -48,19 +48,38 @@ function logMessage(event, fields) {
   return messages[event] ?? event;
 }
 
-export function formatLogEvent(level, event, fields = {}, timestamp = new Date()) {
-  return JSON.stringify({
-    timestamp: timestamp.toISOString(),
-    level,
-    event,
-    message: logMessage(event, fields),
-    ...fields,
-  });
+function formatHumanTimestamp(timestamp) {
+  return timestamp.toISOString().replace('T', ' ').replace(/Z$/, '');
+}
+
+export function formatAuditEvent(level, event, fields = {}, timestamp = new Date()) {
+  const parts = [
+    `${formatHumanTimestamp(timestamp)} ${level.toUpperCase()} ${event === 'diagnostics_request_completed' ? 'Diagnostics request completed' : logMessage(event, fields)}`,
+    fields.request_id === undefined ? undefined : `request=${fields.request_id}`,
+    fields.method === undefined || fields.route === undefined
+      ? undefined
+      : `${fields.method} ${fields.route}`,
+    fields.status_code === undefined ? undefined : `status=${fields.status_code}`,
+    fields.auth_outcome === undefined ? undefined : `auth=${fields.auth_outcome}`,
+    fields.source_fingerprint === undefined ? undefined : `source=${fields.source_fingerprint}`,
+    fields.rate_limit_scope === undefined || fields.rate_limit_decision === undefined
+      ? undefined
+      : `rate-limit=${fields.rate_limit_scope}/${fields.rate_limit_decision} ${fields.rate_limit_count}/${fields.rate_limit_limit}`,
+    fields.rate_limit_remaining === undefined
+      ? undefined
+      : `remaining=${fields.rate_limit_remaining}`,
+    fields.rate_limit_reset_at === undefined
+      ? undefined
+      : `reset=${String(fields.rate_limit_reset_at).replace('T', ' ').replace(/Z$/, '')}`,
+    fields.duration_ms === undefined ? undefined : `duration=${fields.duration_ms}ms`,
+    fields.requested_lines === undefined ? undefined : `lines=${fields.requested_lines}`,
+    fields.source_ip === undefined ? undefined : `source-ip=${fields.source_ip}`,
+  ];
+  return parts.filter((part) => part !== undefined).join(' | ');
 }
 
 export function formatLifecycleEvent(level, event, fields = {}, timestamp = new Date()) {
-  const humanTimestamp = timestamp.toISOString().replace('T', ' ').replace(/Z$/, '');
-  return `${humanTimestamp} ${level.toUpperCase()} ${logMessage(event, fields)}`;
+  return `${formatHumanTimestamp(timestamp)} ${level.toUpperCase()} ${logMessage(event, fields)}`;
 }
 
 function writeLogLine(level, line) {
@@ -70,7 +89,7 @@ function writeLogLine(level, line) {
 }
 
 function logAuditEvent(level, event, fields = {}) {
-  writeLogLine(level, formatLogEvent(level, event, fields));
+  writeLogLine(level, formatAuditEvent(level, event, fields));
 }
 
 function logLifecycleEvent(level, event, fields = {}) {

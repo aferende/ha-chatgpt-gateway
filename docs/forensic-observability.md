@@ -51,15 +51,15 @@ The gateway generates a UUID for every request and returns it as `X-Request-ID`.
 It does not trust an Internet-supplied ID. For a diagnostics call, the gateway
 forwards its internal ID to the companion. The companion accepts it only when it
 has a valid UUID shape; otherwise it generates a new UUID. Match `request_id` in
-the gateway `request_completed` event to the companion
-`diagnostics_request_completed` event.
+the gateway `request_completed` event to `request` in the companion's
+`Diagnostics request completed` line.
 
 ## Audit fields and events
 
 The gateway emits one Pino JSON `request_completed` event per protected request.
-The companion emits one JSON `diagnostics_request_completed` event per protected
-log request. Status 401, 429, and 5xx events use warning level; normal and 4xx
-validation results use info. Fields include:
+The companion emits one compact, pipe-separated `Diagnostics request completed`
+line per protected log request. Status 401, 429, and 5xx events use warning
+level; normal and 4xx validation results use info. Fields include:
 
 - UTC `timestamp`, `request_id`, method, canonical route, status, and duration;
 - `auth_outcome`: `missing`, `malformed`, `invalid`, or `authenticated`;

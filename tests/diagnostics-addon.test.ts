@@ -5,8 +5,8 @@ import {
   BoundedRateLimiter,
   createDiagnosticsServer,
   fetchCoreErrorLogs,
+  formatAuditEvent,
   formatLifecycleEvent,
-  formatLogEvent,
 } from '../ha-chatgpt-diagnostics/server.mjs';
 
 const DIAGNOSTICS_TOKEN = 'a'.repeat(64);
@@ -112,21 +112,31 @@ describe('diagnostics companion', () => {
     expect(JSON.stringify(logger.mock.calls)).not.toContain('WARNING first issue');
   });
 
-  it('formats structured one-line JSON events with an ISO-8601 UTC timestamp', () => {
-    const line = formatLogEvent(
+  it('formats request audits as compact human-readable lines', () => {
+    const line = formatAuditEvent(
       'info',
-      'listening',
-      { host: '0.0.0.0', port: 8099 },
+      'diagnostics_request_completed',
+      {
+        request_id: '123e4567-e89b-42d3-a456-426614174000',
+        method: 'GET',
+        route: '/api/v1/logs/errors',
+        status_code: 200,
+        auth_outcome: 'authenticated',
+        source_fingerprint: '0123456789abcdef01234567',
+        rate_limit_scope: 'diagnostics_authenticated',
+        rate_limit_decision: 'allowed',
+        rate_limit_count: 2,
+        rate_limit_limit: 30,
+        rate_limit_remaining: 28,
+        rate_limit_reset_at: '2026-09-04T19:01:00.000Z',
+        duration_ms: 38.7,
+        requested_lines: 3,
+      },
       new Date('2026-09-04T19:00:00.000Z'),
     );
-    expect(JSON.parse(line)).toEqual({
-      timestamp: '2026-09-04T19:00:00.000Z',
-      level: 'info',
-      event: 'listening',
-      message: 'Diagnostics API listening host=0.0.0.0 port=8099',
-      host: '0.0.0.0',
-      port: 8099,
-    });
+    expect(line).toBe(
+      '2026-09-04 19:00:00.000 INFO Diagnostics request completed | request=123e4567-e89b-42d3-a456-426614174000 | GET /api/v1/logs/errors | status=200 | auth=authenticated | source=0123456789abcdef01234567 | rate-limit=diagnostics_authenticated/allowed 2/30 | remaining=28 | reset=2026-09-04 19:01:00.000 | duration=38.7ms | lines=3',
+    );
     expect(line).not.toContain(DIAGNOSTICS_TOKEN);
   });
 

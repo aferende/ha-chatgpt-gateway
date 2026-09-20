@@ -257,23 +257,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig 
     throw new Error('ALLOWED_DOMAINS must contain at least one domain');
   }
 
-  const credentialScopes = new Map<string, Set<GatewayScope>>();
-  const addCredential = (key: string | undefined, scope: GatewayScope | 'legacy') => {
+  const gatewayCredentials: GatewayCredential[] = [];
+  const addCredential = (
+    id: GatewayCredential['id'],
+    key: string | undefined,
+    scopes: ReadonlySet<GatewayScope>,
+  ) => {
     if (!key) return;
-    const scopes = credentialScopes.get(key) ?? new Set<GatewayScope>();
-    scopes.add('read');
-    if (scope === 'write' || scope === 'legacy') scopes.add('write');
-    credentialScopes.set(key, scopes);
+    gatewayCredentials.push({ id, key, scopes });
   };
-  addCredential(parsed.GATEWAY_API_KEY, 'legacy');
-  addCredential(parsed.GATEWAY_READ_API_KEY, 'read');
-  addCredential(parsed.GATEWAY_WRITE_API_KEY, 'write');
-
-  const gatewayCredentials = [...credentialScopes.entries()].map(([key, scopes]) => ({
-    id: scopes.has('write') ? ('write' as const) : ('read' as const),
-    key,
-    scopes,
-  }));
+  addCredential('legacy', parsed.GATEWAY_API_KEY, new Set(['read', 'write']));
+  addCredential('read', parsed.GATEWAY_READ_API_KEY, new Set(['read']));
+  addCredential('write', parsed.GATEWAY_WRITE_API_KEY, new Set(['read', 'write']));
 
   return {
     port: parsed.PORT,

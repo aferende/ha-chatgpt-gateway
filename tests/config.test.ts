@@ -29,6 +29,21 @@ describe('configuration', () => {
     expect(config.serviceRateLimitMax).toBe(20);
   });
 
+  it('preserves distinct legacy and write credential identities', () => {
+    const legacyKey = strongKey();
+    const writeKey = strongKey();
+    const config = loadConfig({
+      ...commonEnv,
+      GATEWAY_API_KEY: legacyKey,
+      GATEWAY_WRITE_API_KEY: writeKey,
+    });
+
+    expect(config.gatewayCredentials).toEqual([
+      { id: 'legacy', key: legacyKey, scopes: new Set(['read', 'write']) },
+      { id: 'write', key: writeKey, scopes: new Set(['read', 'write']) },
+    ]);
+  });
+
   it.each(['GATEWAY_API_KEY', 'GATEWAY_READ_API_KEY', 'GATEWAY_WRITE_API_KEY'] as const)(
     'rejects a short or non-hex %s',
     (keyName) => {

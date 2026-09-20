@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../src/app.js';
+import { loadConfig } from '../src/config/env.js';
 import { makeConfig } from './helpers.js';
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -268,6 +269,36 @@ describe('service route', () => {
     expect(second.statusCode).toBe(429);
     expect(second.headers['serviceratelimit-limit']).toBe('1');
     expect(fetchMock).toHaveBeenCalledTimes(3);
+    await app.close();
+  });
+
+  it('keeps legacy and write service-call quotas separate for the same client', async () => {
+    const legacyKey = '1'.repeat(64);
+    const writeKey = '2'.repeat(64);
+    const fetchMock = mockServiceResponses();
+    const config = loadConfig({
+      HOME_ASSISTANT_URL: 'http://homeassistant.local:8123',
+      HOME_ASSISTANT_TOKEN: 'ha-test-token',
+      GATEWAY_API_KEY: legacyKey,
+      GATEWAY_WRITE_API_KEY: writeKey,
+      ALLOWED_DOMAINS: 'light,switch',
+      ALLOWED_ENTITIES: 'light.living_room',
+      SERVICE_RATE_LIMIT_MAX: '1',
+      SERVICE_RATE_LIMIT_WINDOW_MS: '60000',
+    });
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const payload = { domain: 'light', service: 'turn_on', entity_id: ['light.living_room'] };
+    const request = (key: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/v1/services/call',
+        headers: { authorization: `Bearer ${key}` },
+        payload,
+      });
+
+    expect((await request(legacyKey)).statusCode).toBe(200);
+    expect((await request(legacyKey)).statusCode).toBe(429);
+    expect((await request(writeKey)).statusCode).toBe(200);
     await app.close();
   });
 

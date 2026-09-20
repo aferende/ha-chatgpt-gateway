@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../src/app.js';
+import { loadConfig } from '../src/config/env.js';
 import { InMemoryRateLimiter } from '../src/security/rate-limit.js';
 import { makeConfig, sampleStates, TEST_GATEWAY_KEY } from './helpers.js';
 
@@ -132,6 +133,46 @@ describe('privacy-preserving request audit', () => {
       rate_limit_count: 2,
       rate_limit_remaining: 0,
     });
+  });
+
+  it('keeps legacy and write audit identities and authenticated quotas separate', async () => {
+    const lines: string[] = [];
+    const legacyKey = '1'.repeat(64);
+    const writeKey = '2'.repeat(64);
+    const config = loadConfig({
+      HOME_ASSISTANT_URL: 'http://homeassistant.local:8123',
+      HOME_ASSISTANT_TOKEN: 'ha-test-token',
+      GATEWAY_API_KEY: legacyKey,
+      GATEWAY_WRITE_API_KEY: writeKey,
+      ALLOWED_DOMAINS: 'light,switch',
+      ALLOWED_ENTITIES: 'light.living_room',
+      AUDIT_HMAC_KEY: '7'.repeat(64),
+      RATE_LIMIT_MAX: '1',
+    });
+    const app = await buildApp({
+      config,
+      fetchImpl: vi.fn<typeof fetch>().mockImplementation(async () => jsonResponse(sampleStates)),
+      logger: auditLogger(lines),
+    });
+    const request = (key: string) =>
+      app.inject({
+        method: 'GET',
+        url: '/api/v1/entities',
+        headers: { authorization: `Bearer ${key}` },
+      });
+
+    expect((await request(legacyKey)).statusCode).toBe(200);
+    expect((await request(legacyKey)).statusCode).toBe(429);
+    expect((await request(writeKey)).statusCode).toBe(200);
+    await app.close();
+
+    const events = auditEvents(lines);
+    expect(events.map((event) => event.credential_id)).toEqual(['legacy', 'legacy', 'write']);
+    expect(
+      events.map(
+        (event) => (event.rate_limits as Array<Record<string, unknown>>)[0]?.rate_limit_count,
+      ),
+    ).toEqual([1, 2, 1]);
   });
 
   it('records trusted proxy use and distinct clients behind one peer', async () => {

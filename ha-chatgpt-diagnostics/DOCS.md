@@ -53,14 +53,8 @@ Supervisor role currently exists.
 
 ## Installation
 
-During review, add the feature fork to **Settings → Apps → App store → ⋮ →
+Add the original project to **Settings → Apps → App store → ⋮ →
 Repositories**:
-
-```text
-https://github.com/GitHub-Mac555/ha-chatgpt-gateway
-```
-
-After upstream publication, use the original project instead:
 
 ```text
 https://github.com/aferende/ha-chatgpt-gateway
@@ -117,7 +111,7 @@ private overlay if this is unacceptable.
 Start the app and open **Protocol**. A successful start looks like this:
 
 ```text
-2026-09-05 07:45:12.123 INFO Diagnostics app started version=0.2.3
+2026-09-05 07:45:12.123 INFO Diagnostics app started version=0.2.4
 2026-09-05 07:45:12.137 INFO Configuration loaded
 2026-09-05 07:45:12.140 INFO Privileges dropped uid=1000 gid=1000
 2026-09-05 07:45:12.168 INFO Diagnostics API listening host=0.0.0.0 port=8099

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.4
+
+- Remove the temporary feature-fork installation instructions and point only
+  to the original upstream project.
+
 ## 0.2.3
 
 - Render request audit events as compact human-readable one-line records while

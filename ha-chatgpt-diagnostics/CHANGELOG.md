@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1
+
+- Restore compact human-readable lifecycle logs while keeping request audit
+  events as structured JSON.
+
 ## 0.2.0
 
 - Emit structured, privacy-preserving request completion events.

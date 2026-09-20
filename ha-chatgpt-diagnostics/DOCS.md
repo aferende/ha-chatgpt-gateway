@@ -117,7 +117,7 @@ private overlay if this is unacceptable.
 Start the app and open **Protocol**. A successful start looks like this:
 
 ```text
-{"timestamp":"2026-09-05T07:45:12.123Z","level":"info","event":"startup_begin","message":"Diagnostics app started version=0.2.0","version":"0.2.0"}
+2026-09-05T07:45:12.123Z INFO Diagnostics app started version=0.2.1
 2026-09-05T07:45:12.137Z INFO Configuration loaded
 2026-09-05T07:45:12.140Z INFO Privileges dropped uid=1000 gid=1000
 2026-09-05T07:45:12.168Z INFO Diagnostics API listening host=0.0.0.0 port=8099

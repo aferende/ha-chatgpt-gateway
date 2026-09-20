@@ -30,7 +30,7 @@ const SENSITIVE_TEXT_PATTERNS = [
   /([?&](?:access[_-]?token|api[_-]?key|password|secret|token)=)[^&#\s]+/gi,
 ];
 
-export function formatLogEvent(level, event, fields = {}, timestamp = new Date()) {
+function logMessage(event, fields) {
   const messages = {
     startup_begin: `Diagnostics app started version=${fields.version}`,
     configuration_loaded: 'Configuration loaded',
@@ -45,20 +45,35 @@ export function formatLogEvent(level, event, fields = {}, timestamp = new Date()
     shutdown_failed: 'Shutdown failed',
     startup_failed: `Startup failed category=${fields.category}`,
   };
+  return messages[event] ?? event;
+}
+
+export function formatLogEvent(level, event, fields = {}, timestamp = new Date()) {
   return JSON.stringify({
     timestamp: timestamp.toISOString(),
     level,
     event,
-    message: messages[event] ?? event,
+    message: logMessage(event, fields),
     ...fields,
   });
 }
 
-function logEvent(level, event, fields = {}) {
-  const line = formatLogEvent(level, event, fields);
+export function formatLifecycleEvent(level, event, fields = {}, timestamp = new Date()) {
+  return `${timestamp.toISOString()} ${level.toUpperCase()} ${logMessage(event, fields)}`;
+}
+
+function writeLogLine(level, line) {
   if (level === 'error') console.error(line);
   else if (level === 'warning') console.warn(line);
   else console.log(line);
+}
+
+function logAuditEvent(level, event, fields = {}) {
+  writeLogLine(level, formatLogEvent(level, event, fields));
+}
+
+function logLifecycleEvent(level, event, fields = {}) {
+  writeLogLine(level, formatLifecycleEvent(level, event, fields));
 }
 
 export function redactSensitiveText(value) {
@@ -255,7 +270,7 @@ export function createDiagnosticsServer({
   diagnosticsToken,
   supervisorToken,
   fetchImpl = fetch,
-  logger = logEvent,
+  logger = logAuditEvent,
   auditHmacKey,
   auditLogRawIps = false,
 }) {
@@ -391,13 +406,13 @@ export function createDiagnosticsServer({
 }
 
 async function main() {
-  logEvent('info', 'startup_begin', { version: APP_VERSION });
+  logLifecycleEvent('info', 'startup_begin', { version: APP_VERSION });
   const options = JSON.parse(await readFile('/data/options.json', 'utf8'));
-  logEvent('info', 'configuration_loaded');
+  logLifecycleEvent('info', 'configuration_loaded');
   if (typeof process.getuid === 'function' && process.getuid() === 0) {
     process.setgid('node');
     process.setuid('node');
-    logEvent('info', 'privileges_dropped', {
+    logLifecycleEvent('info', 'privileges_dropped', {
       uid: process.getuid(),
       gid: process.getgid(),
     });
@@ -412,17 +427,17 @@ async function main() {
     server.once('error', reject);
     server.listen(8099, '0.0.0.0', resolve);
   });
-  logEvent('info', 'listening', { host: '0.0.0.0', port: 8099 });
+  logLifecycleEvent('info', 'listening', { host: '0.0.0.0', port: 8099 });
 
   for (const signal of ['SIGTERM', 'SIGINT']) {
     process.once(signal, () => {
-      logEvent('info', 'shutdown_requested', { signal });
+      logLifecycleEvent('info', 'shutdown_requested', { signal });
       server.close((error) => {
         if (error) {
-          logEvent('error', 'shutdown_failed');
+          logLifecycleEvent('error', 'shutdown_failed');
           process.exit(1);
         }
-        logEvent('info', 'shutdown_complete');
+        logLifecycleEvent('info', 'shutdown_complete');
         process.exit(0);
       });
     });
@@ -439,7 +454,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     } else if (error?.message === 'Supervisor API access is unavailable') {
       category = 'supervisor_token_unavailable';
     }
-    logEvent('error', 'startup_failed', { category });
+    logLifecycleEvent('error', 'startup_failed', { category });
     process.exit(1);
   });
 }

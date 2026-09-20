@@ -138,7 +138,7 @@ describe('diagnostics companion', () => {
         { host: '0.0.0.0', port: 8099 },
         new Date('2026-09-04T19:00:00.000Z'),
       ),
-    ).toBe('2026-09-04T19:00:00.000Z INFO Diagnostics API listening host=0.0.0.0 port=8099');
+    ).toBe('2026-09-04 19:00:00.000 INFO Diagnostics API listening host=0.0.0.0 port=8099');
   });
 
   it.each(['0', '501', '1;cat /etc/passwd', '../secrets'])(

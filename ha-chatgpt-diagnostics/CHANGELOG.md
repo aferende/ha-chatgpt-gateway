@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2
+
+- Display lifecycle timestamps as `YYYY-MM-DD HH:mm:ss.SSS` while retaining UTC
+  and keeping request audit timestamps in ISO-8601 format.
+
 ## 0.2.1
 
 - Restore compact human-readable lifecycle logs while keeping request audit

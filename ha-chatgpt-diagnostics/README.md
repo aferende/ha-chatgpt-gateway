@@ -22,8 +22,9 @@ ChatGPT → HTTPS → HA ChatGPT Gateway
 - Accepts between 1 and 500 recent source lines per request.
 - Applies strict response-size limits, timeouts, rate limits, and redaction.
 - Returns data only through one authenticated, read-only diagnostics endpoint.
-- Produces one-line JSON lifecycle and privacy-preserving request audit events
-  with ISO-8601 UTC timestamps.
+- Produces human-readable one-line lifecycle messages with UTC timestamps and
+  structured privacy-preserving JSON request audit events with ISO-8601 UTC
+  timestamps.
 
 ## Designed for least exposure
 

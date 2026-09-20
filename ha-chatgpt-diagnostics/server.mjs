@@ -59,7 +59,8 @@ export function formatLogEvent(level, event, fields = {}, timestamp = new Date()
 }
 
 export function formatLifecycleEvent(level, event, fields = {}, timestamp = new Date()) {
-  return `${timestamp.toISOString()} ${level.toUpperCase()} ${logMessage(event, fields)}`;
+  const humanTimestamp = timestamp.toISOString().replace('T', ' ').replace(/Z$/, '');
+  return `${humanTimestamp} ${level.toUpperCase()} ${logMessage(event, fields)}`;
 }
 
 function writeLogLine(level, line) {

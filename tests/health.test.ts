@@ -8,7 +8,7 @@ describe('health and OpenAPI', () => {
     const app = await buildApp({ config: makeConfig(), logger: false });
     const response = await app.inject({ method: 'GET', url: '/health' });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ status: 'ok', version: '0.5.0', readOnly: false });
+    expect(response.json()).toEqual({ status: 'ok', version: '0.6.0', readOnly: false });
     await app.close();
   });
 

@@ -38,7 +38,7 @@ On mobile, tap an image to open it at full resolution.
 
 ## Features
 
-- Node.js 22 + TypeScript + Fastify
+- Node.js 22.12+ with TypeScript and Fastify
 - Zod validation
 - OpenAPI 3.1 schema suitable for GPT Actions
 - Home Assistant state and service discovery
@@ -46,6 +46,9 @@ On mobile, tap an image to open it at full resolution.
 - Area and device discovery scoped to allowed entities
 - Optional bounded Home Assistant logbook access for troubleshooting
 - Optional isolated diagnostics companion for bounded Home Assistant Core warning/error logs
+- Privacy-preserving request audit with pseudonymous client/peer fingerprints
+- Correlated server-generated request IDs across the gateway and Diagnostics companion
+- Separate bounded failed-authentication, authenticated, and service-call rate limits
 - GPT Action-friendly generic service calls and controlled multi-step batches
 - Domain and entity allow-lists
 - Optional read-only mode
@@ -375,6 +378,7 @@ See [docs/chatgpt-action.md](docs/chatgpt-action.md).
 - [Reverse proxy, HTTPS, and router port forwarding](docs/reverse-proxy.md)
 - [ChatGPT GPT and Action configuration](docs/chatgpt-action.md)
 - [Diagnostics companion installation and threat model](ha-chatgpt-diagnostics/DOCS.md)
+- [Forensic observability, privacy, rate limits, and incident analysis](docs/forensic-observability.md)
 - [One-prompt Codex deployment assistant](docs/codex-deployment-prompt.md)
 - [Security model and safe rollout](docs/security.md)
 
@@ -409,7 +413,7 @@ This makes deployment possible without installing Node.js or compiling TypeScrip
 
 Requirements:
 
-- Node.js 22
+- Node.js 22.12+
 - npm
 
 Install dependencies:
@@ -451,12 +455,15 @@ Important properties include:
 - read-only container filesystem
 - secrets omitted from diagnostics and logs
 - optional Core logs isolated in a separately installed, authenticated companion
+- privacy-preserving request audit with HMAC-based pseudonymous network fingerprints
+- separate bounded rate-limit buckets for failed authentication, authenticated work, and service calls
+- server-generated request IDs for cross-process diagnostics correlation
 
 See [docs/security.md](docs/security.md).
 
 ## Project status
 
-`v0.5.0` adds opt-in asynchronous dispatch for long-running automations/scripts and selected Home Assistant maintenance actions. The current main branch also includes opt-in, policy-filtered logbook access and the optional diagnostics companion for bounded Home Assistant Core warning/error logs, while keeping Supervisor credentials out of the Internet-facing gateway.
+`v0.6.0` adds policy-filtered Logbook access, the isolated Diagnostics companion, privacy-preserving request observability, cross-process request correlation, and independent bounded authentication/service rate-limit buckets. Positive ISO-8601 UTC offsets are handled safely, credential identities remain distinct for audit and throttling, and the runtime dependency floor includes Fastify 5.12.5.
 
 ## License
 

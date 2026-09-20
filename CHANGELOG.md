@@ -2,19 +2,29 @@
 
 ## Unreleased
 
+## v0.6.0 — Diagnostics and forensic observability
+
 ### Added
 
-- Adds an optional Home Assistant diagnostics companion and an opt-in gateway route for bounded, redacted Home Assistant Core warning/error lines.
-- Keeps bounded traceback and continuation context with selected warning/error records.
+- Adds opt-in, policy-filtered Home Assistant Logbook access with bounded time ranges, response limits, and state minimization.
+- Adds an optional Home Assistant Diagnostics companion and an opt-in gateway route for bounded, redacted Home Assistant Core warning/error records with traceback and continuation context.
+- Adds structured, privacy-preserving request completion audit events with server-generated request IDs and HMAC-based pseudonymous client/peer fingerprints.
+- Correlates gateway-to-Diagnostics requests with a shared validated request ID and documents forensic analysis, privacy boundaries, retention, and incident handling.
 
 ### Security
 
-- Keeps Supervisor credentials out of the Internet-facing gateway and exposes no generic Supervisor, filesystem, shell, or log-source proxy.
-- Applies the existing redaction and response bounds to every retained traceback line.
+- Separates failed-authentication, authenticated, and service-call rate-limit buckets so invalid authentication attempts cannot consume authenticated quota.
+- Bounds process-local rate-limit maps and preserves independent credential identities for legacy, read, and write keys.
+- Keeps raw IP logging disabled by default; optional persistent audit HMAC keys allow stable pseudonyms across restarts without reusing API credentials.
+- Keeps Supervisor credentials and Core log content out of gateway audit events and exposes no generic Supervisor, filesystem, shell, or log-source proxy.
+- Raises the declared Fastify runtime dependency floor to 5.12.5 and aligns the project Node.js requirement with the current test toolchain.
 
 ### Fixed
 
+- Accepts ISO-8601 History and Logbook timestamps with encoded or narrowly repaired raw positive UTC offsets without broadly rewriting query values.
 - Keeps optional Logbook and Core-error-log OpenAPI operation descriptions within ChatGPT's 300-character import limit and adds regression coverage.
+- Preserves distinct `legacy`, `read`, and `write` credential identities for audit attribution and independent authenticated/service rate-limit buckets.
+- Makes Diagnostics lifecycle and request audit logs compact and human-readable while retaining correlation and rate-limit metadata.
 
 ## v0.5.0 — Long-running automations and opt-in administration
 

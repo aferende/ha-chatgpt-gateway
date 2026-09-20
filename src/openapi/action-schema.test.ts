@@ -36,4 +36,16 @@ describe('diagnostic OpenAPI feature flags', () => {
     expect(logbook && 'get' in logbook ? logbook.get.description : '').toContain('24 hours');
     expect(logbook && 'get' in logbook ? logbook.get.description : '').toContain('7 days');
   });
+
+  it('tells clients to percent-encode positive date-time offsets', () => {
+    const schema = buildOpenApiSchema('https://gateway.example.com', { logbookEnabled: true });
+    for (const path of ['/api/v1/entities/{entityId}/history', '/api/v1/logbook'] as const) {
+      const route = schema.paths[path];
+      const parameters = route && 'get' in route ? route.get.parameters : [];
+      const startTime = parameters?.find((parameter) => parameter.name === 'start_time');
+      expect(startTime && 'description' in startTime ? startTime.description : undefined).toContain(
+        '%2B',
+      );
+    }
+  });
 });

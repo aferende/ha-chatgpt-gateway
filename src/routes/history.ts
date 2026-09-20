@@ -4,14 +4,15 @@ import type { GatewayConfig } from '../config/env.js';
 import type { HomeAssistantClient } from '../home-assistant/client.js';
 import { invalidRequest } from '../http/errors.js';
 import { entityParamsSchema } from '../schemas/entity.js';
+import { isoDateTimeQuerySchema } from '../schemas/iso-date-time.js';
 import { getEntityDomain, isEntityAllowed } from '../security/authorization.js';
 import { redactSensitive } from '../security/redaction.js';
 
 const MAX_HISTORY_DAYS = 31;
 
 const historyQuerySchema = z.object({
-  start_time: z.string().datetime({ offset: true }),
-  end_time: z.string().datetime({ offset: true }).optional(),
+  start_time: isoDateTimeQuerySchema,
+  end_time: isoDateTimeQuerySchema.optional(),
   max_points: z.coerce.number().int().min(2).max(5_000).default(1_000),
 });
 

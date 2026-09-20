@@ -29,6 +29,21 @@ describe('configuration', () => {
     expect(config.serviceRateLimitMax).toBe(20);
   });
 
+  it('preserves distinct legacy and write credential identities', () => {
+    const legacyKey = strongKey();
+    const writeKey = strongKey();
+    const config = loadConfig({
+      ...commonEnv,
+      GATEWAY_API_KEY: legacyKey,
+      GATEWAY_WRITE_API_KEY: writeKey,
+    });
+
+    expect(config.gatewayCredentials).toEqual([
+      { id: 'legacy', key: legacyKey, scopes: new Set(['read', 'write']) },
+      { id: 'write', key: writeKey, scopes: new Set(['read', 'write']) },
+    ]);
+  });
+
   it.each(['GATEWAY_API_KEY', 'GATEWAY_READ_API_KEY', 'GATEWAY_WRITE_API_KEY'] as const)(
     'rejects a short or non-hex %s',
     (keyName) => {
@@ -48,6 +63,15 @@ describe('configuration', () => {
     const config = loadConfig({ ...commonEnv, GATEWAY_API_KEY: strongKey() });
     expect(config.trustedProxies).toEqual([]);
     expect(config.errorLogsEnabled).toBe(false);
+    expect(config.auditLogEnabled).toBe(true);
+    expect(config.auditLogRawIps).toBe(false);
+    expect(config.auditHmacKey).toBeUndefined();
+  });
+
+  it('accepts only a strong optional audit HMAC key', () => {
+    const base = { ...commonEnv, GATEWAY_API_KEY: strongKey() };
+    expect(loadConfig({ ...base, AUDIT_HMAC_KEY: strongKey() }).auditHmacKey).toHaveLength(64);
+    expect(() => loadConfig({ ...base, AUDIT_HMAC_KEY: 'short' })).toThrow(/64 hexadecimal/);
   });
 
   it('requires both companion settings only when error logs are enabled', () => {

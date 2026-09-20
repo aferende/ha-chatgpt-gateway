@@ -1,4 +1,5 @@
-import Fastify, { type FastifyInstance } from 'fastify';
+import { randomUUID } from 'node:crypto';
+import Fastify, { LogController, type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import type { GatewayConfig } from './config/env.js';
 import { DiagnosticsAddonClient, DiagnosticsAddonError } from './diagnostics/client.js';
 import {
@@ -15,18 +16,24 @@ import { registerLogbookRoutes } from './routes/logbook.js';
 import { registerServiceRoutes } from './routes/services.js';
 import { registerSystemRoutes } from './routes/system.js';
 import { createAuthenticationHook } from './security/authentication.js';
-import { createRateLimitHook } from './security/rate-limit.js';
+import { createGatewayAuditHooks } from './security/audit.js';
+import {
+  createAuthenticatedRateLimitHook,
+  createPreAuthRateLimitHook,
+} from './security/rate-limit.js';
 
 export interface BuildAppOptions {
   config: GatewayConfig;
   fetchImpl?: typeof fetch;
   webSocketFactory?: WebSocketFactory;
-  logger?: boolean;
+  logger?: FastifyServerOptions['logger'];
 }
 
 export async function buildApp(options: BuildAppOptions): Promise<FastifyInstance> {
   const app = Fastify({
-    logger: options.logger === false ? false : { level: options.config.logLevel },
+    logger: options.logger ?? { level: options.config.logLevel },
+    genReqId: () => randomUUID(),
+    logController: new LogController({ disableRequestLogging: true }),
     bodyLimit: 1024 * 1024,
     trustProxy:
       options.config.trustedProxies.length > 0 ? [...options.config.trustedProxies] : false,
@@ -86,8 +93,12 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   );
 
   await app.register(async (protectedApp) => {
-    protectedApp.addHook('onRequest', createRateLimitHook(options.config));
+    const audit = createGatewayAuditHooks(options.config);
+    protectedApp.addHook('onRequest', audit.onRequest);
     protectedApp.addHook('onRequest', createAuthenticationHook(options.config));
+    protectedApp.addHook('onRequest', createPreAuthRateLimitHook(options.config));
+    protectedApp.addHook('onRequest', createAuthenticatedRateLimitHook(options.config));
+    protectedApp.addHook('onResponse', audit.onResponse);
     await registerEntityRoutes(protectedApp, options.config, client);
     await registerErrorLogRoutes(protectedApp, options.config, diagnosticsClient);
     await registerHistoryRoutes(protectedApp, options.config, client);

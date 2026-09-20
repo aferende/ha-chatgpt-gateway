@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { GatewayConfig } from '../config/env.js';
 import type { HomeAssistantClient } from '../home-assistant/client.js';
 import { invalidRequest } from '../http/errors.js';
+import { isoDateTimeQuerySchema } from '../schemas/iso-date-time.js';
 import { isEntityAllowed } from '../security/authorization.js';
 import { redactSensitive } from '../security/redaction.js';
 
@@ -10,8 +11,8 @@ const MAX_UNSCOPED_LOGBOOK_HOURS = 24;
 const MAX_SCOPED_LOGBOOK_DAYS = 7;
 const MAX_LOGBOOK_ENTRIES = 500;
 const logbookQuerySchema = z.object({
-  start_time: z.string().datetime({ offset: true }),
-  end_time: z.string().datetime({ offset: true }).optional(),
+  start_time: isoDateTimeQuerySchema,
+  end_time: isoDateTimeQuerySchema.optional(),
   entity_id: z.string().min(1).max(255).optional(),
   limit: z.coerce.number().int().min(1).max(MAX_LOGBOOK_ENTRIES).default(200),
   include_state: z

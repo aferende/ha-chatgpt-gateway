@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.2.4
+
+- Remove the temporary feature-fork installation instructions and point only
+  to the original upstream project.
+
+## 0.2.3
+
+- Render request audit events as compact human-readable one-line records while
+  preserving correlation, authentication, rate-limit, timing, and source
+  fingerprint metadata.
+
+## 0.2.2
+
+- Display lifecycle timestamps as `YYYY-MM-DD HH:mm:ss.SSS` while retaining UTC
+  and keeping request audit timestamps in ISO-8601 format.
+
+## 0.2.1
+
+- Restore compact human-readable lifecycle logs while keeping request audit
+  events as structured JSON.
+
+## 0.2.0
+
+- Emit structured, privacy-preserving request completion events.
+- Separate failed-authentication and authenticated rate-limit buckets.
+- Correlate gateway and companion requests with a validated request ID.
+- Bound process-local limiter maps and document restart behavior.
+
 ## 0.1.10
 
 - Preserve bounded traceback and continuation context for selected warning,

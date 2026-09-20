@@ -69,7 +69,13 @@ describe('gateway error log route', () => {
     expect(url.searchParams.get('lines')).toBe('100');
     expect(init.method).toBe('GET');
     expect(init.redirect).toBe('error');
-    expect(init.headers).toEqual({ authorization: `Bearer ${DIAGNOSTICS_TOKEN}` });
+    expect(init.headers).toEqual({
+      authorization: `Bearer ${DIAGNOSTICS_TOKEN}`,
+      'x-request-id': expect.stringMatching(/^[0-9a-f-]{36}$/),
+    });
+    expect((init.headers as Record<string, string>)['x-request-id']).toBe(
+      response.headers['x-request-id'],
+    );
     await app.close();
   });
 

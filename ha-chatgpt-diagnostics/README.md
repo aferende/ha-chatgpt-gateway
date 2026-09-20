@@ -22,7 +22,8 @@ ChatGPT → HTTPS → HA ChatGPT Gateway
 - Accepts between 1 and 500 recent source lines per request.
 - Applies strict response-size limits, timeouts, rate limits, and redaction.
 - Returns data only through one authenticated, read-only diagnostics endpoint.
-- Produces compact English lifecycle logs with ISO-8601 UTC timestamps.
+- Produces compact human-readable one-line lifecycle and privacy-preserving
+  request audit messages with UTC timestamps.
 
 ## Designed for least exposure
 
@@ -50,6 +51,8 @@ trusted network.
 - The network port is not published automatically.
 - Unknown parameters and arbitrary source selection are rejected.
 - Responses use `Cache-Control: no-store`.
+- Failed-authentication and authenticated requests use separate bounded,
+  process-local rate-limit buckets; all counts reset on restart.
 - Tokens, authorization headers, and returned Home Assistant log text are
   never written to the app's own log.
 - Traceback context is subject to the same line, byte, per-line, and redaction

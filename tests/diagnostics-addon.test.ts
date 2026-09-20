@@ -1,9 +1,12 @@
 import type { AddressInfo } from 'node:net';
+import { readFile } from 'node:fs/promises';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  BoundedRateLimiter,
   createDiagnosticsServer,
   fetchCoreErrorLogs,
-  formatLogEvent,
+  formatAuditEvent,
+  formatLifecycleEvent,
 } from '../ha-chatgpt-diagnostics/server.mjs';
 
 const DIAGNOSTICS_TOKEN = 'a'.repeat(64);
@@ -42,6 +45,17 @@ async function fetchLogResult(logText: string, lines = 100) {
 }
 
 describe('diagnostics companion', () => {
+  it('keeps the image version aligned with the app configuration', async () => {
+    const [config, dockerfile] = await Promise.all([
+      readFile(new URL('../ha-chatgpt-diagnostics/config.yaml', import.meta.url), 'utf8'),
+      readFile(new URL('../ha-chatgpt-diagnostics/Dockerfile', import.meta.url), 'utf8'),
+    ]);
+    const version = config.match(/^version:\s*(\S+)$/m)?.[1];
+
+    expect(version).toBeDefined();
+    expect(dockerfile).toContain(`ARG BUILD_VERSION=${version}`);
+  });
+
   it('exposes health without authentication', async () => {
     const { baseUrl } = await startServer();
     const response = await fetch(`${baseUrl}/health`);
@@ -56,7 +70,15 @@ describe('diagnostics companion', () => {
     const { baseUrl, logger } = await startServer();
     const response = await fetch(`${baseUrl}/api/v1/logs/errors`, { headers });
     expect(response.status).toBe(401);
-    expect(logger).toHaveBeenCalledWith('warning', 'authentication_failed');
+    expect(logger).toHaveBeenCalledWith(
+      'warning',
+      'diagnostics_request_completed',
+      expect.objectContaining({
+        auth_outcome: headers ? 'invalid' : 'missing',
+        rate_limit_scope: 'diagnostics_pre_auth',
+        status_code: 401,
+      }),
+    );
     expect(JSON.stringify(logger.mock.calls)).not.toContain(DIAGNOSTICS_TOKEN);
   });
 
@@ -78,23 +100,55 @@ describe('diagnostics companion', () => {
     const supervisorUrl = fetchImpl.mock.calls[0]?.[0] as URL;
     expect(supervisorUrl.pathname).toBe('/core/logs');
     expect(supervisorUrl.searchParams.get('lines')).toBe('25');
-    expect(logger).toHaveBeenCalledWith('info', 'core_logs_returned', {
-      requested_lines: 25,
-      returned_lines: 2,
-    });
+    expect(logger).toHaveBeenCalledWith(
+      'info',
+      'diagnostics_request_completed',
+      expect.objectContaining({
+        auth_outcome: 'authenticated',
+        requested_lines: 25,
+        status_code: 200,
+      }),
+    );
+    expect(JSON.stringify(logger.mock.calls)).not.toContain('WARNING first issue');
   });
 
-  it('formats readable English log events with an ISO-8601 UTC timestamp', () => {
-    const line = formatLogEvent(
+  it('formats request audits as compact human-readable lines', () => {
+    const line = formatAuditEvent(
       'info',
-      'listening',
-      { host: '0.0.0.0', port: 8099 },
+      'diagnostics_request_completed',
+      {
+        request_id: '123e4567-e89b-42d3-a456-426614174000',
+        method: 'GET',
+        route: '/api/v1/logs/errors',
+        status_code: 200,
+        auth_outcome: 'authenticated',
+        source_fingerprint: '0123456789abcdef01234567',
+        rate_limit_scope: 'diagnostics_authenticated',
+        rate_limit_decision: 'allowed',
+        rate_limit_count: 2,
+        rate_limit_limit: 30,
+        rate_limit_remaining: 28,
+        rate_limit_reset_at: '2026-09-04T19:01:00.000Z',
+        duration_ms: 38.7,
+        requested_lines: 3,
+      },
       new Date('2026-09-04T19:00:00.000Z'),
     );
     expect(line).toBe(
-      '2026-09-04T19:00:00.000Z INFO Diagnostics API listening host=0.0.0.0 port=8099',
+      '2026-09-04 19:00:00.000 INFO Diagnostics request completed | request=123e4567-e89b-42d3-a456-426614174000 | GET /api/v1/logs/errors | status=200 | auth=authenticated | source=0123456789abcdef01234567 | rate-limit=diagnostics_authenticated/allowed 2/30 | remaining=28 | reset=2026-09-04 19:01:00.000 | duration=38.7ms | lines=3',
     );
     expect(line).not.toContain(DIAGNOSTICS_TOKEN);
+  });
+
+  it('formats lifecycle events as compact human-readable lines', () => {
+    expect(
+      formatLifecycleEvent(
+        'info',
+        'listening',
+        { host: '0.0.0.0', port: 8099 },
+        new Date('2026-09-04T19:00:00.000Z'),
+      ),
+    ).toBe('2026-09-04 19:00:00.000 INFO Diagnostics API listening host=0.0.0.0 port=8099');
   });
 
   it.each(['0', '501', '1;cat /etc/passwd', '../secrets'])(
@@ -155,6 +209,58 @@ describe('diagnostics companion', () => {
       headers: authorizedHeaders(),
     });
     expect(response.status).toBe(429);
+    expect(response.headers.get('retry-after')).toBeDefined();
+  });
+
+  it('starts with empty process-local rate-limit state after restart', async () => {
+    const first = await startServer();
+    for (let index = 0; index < 31; index += 1) {
+      await fetch(`${first.baseUrl}/api/v1/logs/errors?lines=1`, {
+        headers: authorizedHeaders(),
+      });
+    }
+    const firstServer = servers.shift();
+    await new Promise<void>((resolve) => firstServer?.close(() => resolve()));
+
+    const restarted = await startServer();
+    const response = await fetch(`${restarted.baseUrl}/api/v1/logs/errors?lines=1`, {
+      headers: authorizedHeaders(),
+    });
+    expect(response.status).toBe(200);
+  });
+
+  it('keeps failed-auth and authenticated quotas independent', async () => {
+    const { baseUrl } = await startServer();
+    for (let index = 0; index < 30; index += 1) {
+      const response = await fetch(`${baseUrl}/api/v1/logs/errors`, {
+        headers: { authorization: `Bearer ${'b'.repeat(64)}` },
+      });
+      expect(response.status).toBe(401);
+    }
+    const valid = await fetch(`${baseUrl}/api/v1/logs/errors?lines=1`, {
+      headers: authorizedHeaders(),
+    });
+    expect(valid.status).toBe(200);
+  });
+
+  it('accepts only a valid request ID for gateway correlation', async () => {
+    const { baseUrl, logger } = await startServer();
+    const requestId = '123e4567-e89b-42d3-a456-426614174000';
+    await fetch(`${baseUrl}/api/v1/logs/errors`, {
+      headers: { ...authorizedHeaders(), 'x-request-id': requestId },
+    });
+    expect(logger).toHaveBeenCalledWith(
+      'info',
+      'diagnostics_request_completed',
+      expect.objectContaining({ request_id: requestId }),
+    );
+
+    await fetch(`${baseUrl}/api/v1/logs/errors`, {
+      headers: { ...authorizedHeaders(), 'x-request-id': 'untrusted-value' },
+    });
+    const generatedId = logger.mock.calls.at(-1)?.[2]?.request_id;
+    expect(generatedId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(generatedId).not.toBe('untrusted-value');
   });
 
   it('does not expose Supervisor errors or tokens', async () => {
@@ -178,6 +284,18 @@ describe('diagnostics companion', () => {
     expect(response.status).toBe(503);
     expect(body).not.toContain('secret supervisor failure');
     expect(body).not.toContain('supervisor-test-token');
+  });
+});
+
+describe('companion rate-limit storage', () => {
+  it('bounds entries and resets expired buckets', () => {
+    const limiter = new BoundedRateLimiter(1, 1_000, 2);
+    expect(limiter.consume('a', 0).decision).toBe('allowed');
+    expect(limiter.consume('a', 1).decision).toBe('blocked');
+    expect(limiter.consume('a', 1_000).count).toBe(1);
+    limiter.consume('b', 1_000);
+    limiter.consume('c', 1_000);
+    expect(limiter.size).toBe(2);
   });
 });
 

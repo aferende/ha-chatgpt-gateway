@@ -28,7 +28,7 @@ This works with Synology Reverse Proxy, Nginx, Nginx Proxy Manager, Caddy, Traef
 
 ## Trusted proxy configuration
 
-The gateway's per-client rate limit uses Fastify's `request.ip`. With no trusted proxy configured, that is the TCP socket peer and forwarding headers are ignored. This is secure for direct access, but a reverse proxy then makes its own address the shared rate-limit bucket.
+The gateway's failed-auth, authenticated, and service rate limits use Fastify's `request.ip` (authenticated scopes also include credential ID). With no trusted proxy configured, that address is the TCP socket peer and forwarding headers are ignored. This is secure for direct access, but a reverse proxy then makes its own address shared by clients within each applicable scope.
 
 ```text
 Internet -> trusted reverse proxy -> Fastify trustProxy -> request.ip = real client -> per-client rate limit

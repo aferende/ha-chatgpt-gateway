@@ -10,6 +10,67 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe('history and automation routes', () => {
+  it.each([
+    ['UTC Z', '2026-09-15T05:40:00Z', '2026-09-15T05:45:00Z'],
+    ['encoded positive offset', '2026-09-15T07:40:00%2B02:00', '2026-09-15T07:45:00%2B02:00'],
+    ['raw positive offset', '2026-09-15T07:40:00+02:00', '2026-09-15T07:45:00+02:00'],
+    ['zero offset', '2026-09-15T05:40:00+00:00', '2026-09-15T05:45:00+00:00'],
+    ['negative offset', '2026-09-15T00:10:00-05:30', '2026-09-15T00:15:00-05:30'],
+  ])('accepts %s timestamps through the literal inject URL', async (_label, start, end) => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse([[]]));
+    const config = makeConfig({ allowedDomains: new Set(['sensor']) });
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/entities/sensor.energy/history?start_time=${start}&end_time=${end}`,
+      headers: { authorization: `Bearer ${config.gatewayApiKey}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      start_time: '2026-09-15T05:40:00.000Z',
+      end_time: '2026-09-15T05:45:00.000Z',
+    });
+    await app.close();
+  });
+
+  it('accepts positive offsets serialized by URLSearchParams', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse([[]]));
+    const config = makeConfig({ allowedDomains: new Set(['sensor']) });
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const query = new URLSearchParams({
+      start_time: '2026-09-15T07:40:00+02:00',
+      end_time: '2026-09-15T07:45:00+02:00',
+    });
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/entities/sensor.energy/history?${query.toString()}`,
+      headers: { authorization: `Bearer ${config.gatewayApiKey}` },
+    });
+
+    expect(query.toString()).toContain('%2B02%3A00');
+    expect(response.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it.each(['not-a-date', '2026-09-15 07:40:00 02:00', 'prefix 2026-09-15T07:40:00 02:00'])(
+    'rejects invalid date-time %s without broad space replacement',
+    async (start) => {
+      const fetchMock = vi.fn<typeof fetch>();
+      const config = makeConfig({ allowedDomains: new Set(['sensor']) });
+      const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/v1/entities/sensor.energy/history?start_time=${encodeURIComponent(start)}`,
+        headers: { authorization: `Bearer ${config.gatewayApiKey}` },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(fetchMock).not.toHaveBeenCalled();
+      await app.close();
+    },
+  );
+
   it('returns minimal bounded history only for an allowed entity', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       jsonResponse([

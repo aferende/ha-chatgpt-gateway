@@ -18,19 +18,19 @@ function safeEqual(left: string, right: string): boolean {
 }
 
 export function createAuthenticationHook(config: GatewayConfig) {
-  return async function authenticate(
-    request: FastifyRequest,
-    reply: FastifyReply,
-  ): Promise<FastifyReply | void> {
+  return async function authenticate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
     const authorization = request.headers.authorization;
-    const [scheme, token] = authorization?.split(' ') ?? [];
-
-    if (scheme?.toLowerCase() !== 'bearer' || !token) {
-      return reply.code(401).send({
-        error: 'unauthorized',
-        message: 'A valid Bearer API key is required.',
-      });
+    if (!authorization) {
+      if (request.gatewayAudit) request.gatewayAudit.authOutcome = 'missing';
+      return;
     }
+
+    const match = /^Bearer ([^\s]+)$/i.exec(authorization);
+    if (!match) {
+      if (request.gatewayAudit) request.gatewayAudit.authOutcome = 'malformed';
+      return;
+    }
+    const token = match[1] as string;
 
     const scopes = new Set<GatewayScope>();
     const credentialIds: string[] = [];
@@ -44,13 +44,15 @@ export function createAuthenticationHook(config: GatewayConfig) {
     }
 
     if (scopes.size === 0) {
-      return reply.code(401).send({
-        error: 'unauthorized',
-        message: 'A valid Bearer API key is required.',
-      });
+      if (request.gatewayAudit) request.gatewayAudit.authOutcome = 'invalid';
+      return;
     }
 
     request.gatewayAuth = { credentialIds, scopes };
+    if (request.gatewayAudit) {
+      request.gatewayAudit.authOutcome = 'authenticated';
+      request.gatewayAudit.credentialId = credentialIds.join(',');
+    }
   };
 }
 

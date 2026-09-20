@@ -17,6 +17,8 @@ function makeConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfig {
     logbookEnabled: true,
     errorLogsEnabled: false,
     logLevel: 'silent',
+    auditLogEnabled: false,
+    auditLogRawIps: false,
     homeAssistantTimeoutMs: 10_000,
     homeAssistantServiceTimeoutMs: 30_000,
     asyncServiceDispatchEnabled: false,
@@ -41,6 +43,41 @@ function makeClient(entries: unknown[]): HomeAssistantClient {
 }
 
 describe('logbook routes', () => {
+  it.each([
+    ['2026-09-15T05:40:00Z', '2026-09-15T05:45:00Z'],
+    ['2026-09-15T07:40:00%2B02:00', '2026-09-15T07:45:00%2B02:00'],
+    ['2026-09-15T07:40:00+02:00', '2026-09-15T07:45:00+02:00'],
+    ['2026-09-15T00:10:00-05:30', '2026-09-15T00:15:00-05:30'],
+  ])('accepts bounded ISO timestamps %s', async (start, end) => {
+    const app = Fastify();
+    const client = makeClient([]);
+    await registerLogbookRoutes(app, makeConfig(), client);
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/logbook?start_time=${start}&end_time=${end}`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(client.getLogbook).toHaveBeenCalledWith(
+      '2026-09-15T05:40:00.000Z',
+      '2026-09-15T05:45:00.000Z',
+      undefined,
+    );
+    await app.close();
+  });
+
+  it('does not accept unrelated invalid strings containing spaces', async () => {
+    const app = Fastify();
+    await registerLogbookRoutes(app, makeConfig(), makeClient([]));
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/logbook?start_time=not%20a%20date%2002%3A00',
+    });
+
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+
   it('does not register the route when logbook access is disabled', async () => {
     const app = Fastify();
     await registerLogbookRoutes(app, makeConfig({ logbookEnabled: false }), makeClient([]));

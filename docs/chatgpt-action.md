@@ -1,5 +1,7 @@
 # ChatGPT GPT and Action setup
 
+**Legacy interface:** v0.7.0 uses the [MCP plugin and Keycloak](plugin-migration.md) as its primary integration. This guide applies only with `ENABLE_LEGACY_REST_API=true` and REST keys, which are not OAuth credentials. In MCP-only mode `/openapi.json` and the legacy API are absent.
+
 This gateway is used by a **custom GPT**. It is not automatically available in every new ChatGPT conversation: start a chat with the GPT itself, or invoke that GPT where the ChatGPT interface supports it.
 
 ## Prerequisites

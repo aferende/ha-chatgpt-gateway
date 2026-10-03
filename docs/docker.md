@@ -1,5 +1,29 @@
 # Docker and Docker Compose installation
 
+## v0.7.0 plugin stack and breaking migration
+
+New installations use MCP/Keycloak instead of a GPT Action. Separate gateway `.env` and provider `.env.keycloak` files. The legacy instructions below require `ENABLE_LEGACY_REST_API=true`; see [plugin migration](plugin-migration.md) for OAuth bootstrap.
+
+```sh
+docker compose --env-file .env --env-file .env.keycloak \
+  -f docker-compose.ghcr.yml -f docker-compose.oauth.yml --profile oauth pull
+docker compose --env-file .env --env-file .env.keycloak \
+  -f docker-compose.ghcr.yml -f docker-compose.oauth.yml --profile oauth up -d
+```
+
+For a source build replace the GHCR file with `docker-compose.yml` and use `up -d --build`.
+
+When Keycloak is already configured, the gateway can also run standalone:
+
+```sh
+docker run -d --name ha-chatgpt-gateway --restart unless-stopped \
+  --env-file .env -p 127.0.0.1:8787:8787 \
+  --read-only --tmpfs /tmp --security-opt no-new-privileges:true \
+  ghcr.io/aferende/ha-chatgpt-gateway:v0.7.0
+```
+
+Provider/database storage remains required and persistent. Proxy HTTPS to the loopback gateway; a containerized proxy can use a private Docker network. Do not delete PostgreSQL volumes during updates.
+
 The gateway needs Docker Engine 24+ with Docker Compose v2. The published image supports `linux/amd64` and `linux/arm64`.
 
 Use a local `.env` file for all runtime values. It contains Home Assistant and gateway credentials, so never commit it or paste it into ChatGPT:

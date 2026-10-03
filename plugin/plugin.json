@@ -1,0 +1,18 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "ha-chatgpt-gateway",
+  "version": "0.7.0",
+  "description": "Self-hosted, policy-enforced Home Assistant discovery and control through MCP.",
+  "license": "MIT",
+  "repository": "https://github.com/aferende/ha-chatgpt-gateway",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Home Assistant ChatGPT Gateway Plugin",
+        "shortDescription": "Private Home Assistant control",
+        "composerIcon": "./assets/icon.png",
+        "logo": "./assets/icon.png"
+      }
+    }
+  }
+}

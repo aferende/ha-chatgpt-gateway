@@ -1,5 +1,7 @@
 # NAS Docker deployment example
 
+For v0.7.0 plugin deployments, use the standard [Keycloak/PostgreSQL stack](plugin-migration.md#keycloak-is-the-standard-oauth-provider). It runs alongside the gateway, including on Synology; the Synology OAuth Service package is not used. Keep provider/database storage persistent and the administrator/master-realm endpoints local. The gateway retains the same HTTPS hostname and port; proxy only the dedicated OAuth realm and login assets. If using custom path rules on DSM, preserve and revalidate them whenever DSM regenerates its reverse-proxy configuration.
+
 This example applies to Synology Container Manager and to other NAS systems that provide Docker Compose. It uses the published GHCR image, so the NAS does not need Node.js or a local source build. For the full `docker run` and Compose reference, see [docker.md](docker.md).
 
 ## Before starting

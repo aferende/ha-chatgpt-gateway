@@ -3,5 +3,10 @@ dist
 .git
 .github
 .env
+.env.*
+*.private.*
+*.backup*
+private
+release-artifacts
 coverage
 *.log

@@ -1,12 +1,19 @@
 # Security
 
+## MCP plugin authentication
+
+The optional MCP interface uses Keycloak OAuth, not gateway REST keys. Home Assistant tokens remain exclusively on the gateway host. Both surfaces use the same action handlers and entity/domain policy. OAuth tokens require issuer, resource audience, expiry, scopes and gateway roles to pass validation through Keycloak's JWKS endpoint. Requested scopes alone do not grant write access. Setup-only mode publishes metadata but permits no MCP operations. The gateway never receives the Keycloak bootstrap administrator password. See [plugin migration](plugin-migration.md) for the standard Keycloak stack and rollout gates.
+
 ## Trust boundaries
 
-- ChatGPT knows only one gateway credential: preferably `GATEWAY_WRITE_API_KEY`, or the backward-compatible `GATEWAY_API_KEY`.
+- MCP clients use short-lived Keycloak access tokens; scoped roles are checked independently of requested scopes. The gateway never receives the user's Keycloak password or the provider's administrator password.
+- Legacy REST clients use `GATEWAY_WRITE_API_KEY` or the backward-compatible `GATEWAY_API_KEY`; REST keys are not accepted at `/mcp`.
 - HA ChatGPT Gateway knows gateway credentials and `HOME_ASSISTANT_TOKEN`.
 - The optional diagnostics companion knows its internal bearer token and receives a Supervisor token with the `homeassistant` role. The Internet-facing gateway never receives the Supervisor token.
 - Home Assistant never needs OpenAI credentials.
-- `HOME_ASSISTANT_TOKEN` must never be copied into a GPT Action.
+- `HOME_ASSISTANT_TOKEN` must never be copied into a plugin, MCP connection or GPT Action.
+
+The supported JWT access-token lifetime is five minutes. Revoking a session or removing a role prevents subsequent grants/refreshes, but an already issued JWT can remain valid until expiry. Do not claim immediate revocation of an offline-validated access token.
 
 ## Recommended baseline
 

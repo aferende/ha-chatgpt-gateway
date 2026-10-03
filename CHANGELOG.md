@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased
+## v0.7.0 — Home Assistant ChatGPT Gateway Plugin
+
+### Breaking integration change
+
+- Replaces the primary custom GPT/OpenAPI Action setup with a personal MCP plugin and standard self-hosted Keycloak authentication. API keys are not OAuth plugin credentials.
+- New example installations are MCP-only; legacy REST/OpenAPI remain available with `ENABLE_LEGACY_REST_API=true` for backward compatibility.
+
+- Adds opt-in stateless MCP Streamable HTTP and a portable plugin/skill package, retaining REST and sharing the existing action handlers.
+- Adds OAuth resource metadata, JWT/JWKS verification and authenticated opaque-token introspection, plus a fail-closed setup-only mode.
+- Preserves entity policies, batches, service limits and asynchronous semantics; binds dispatch status to the creating identity.
+- Standardizes plugin authentication on the included Keycloak/PostgreSQL stack, with a preregistered confidential PKCE client and separate read/write roles.
+- Documents Keycloak bootstrap, callback registration and the official custom GPT retirement dates.
+- Supports ChatGPT's `openid offline_access read write` request through an optional offline scope and an explicitly authorized offline role, with regression coverage ensuring offline access cannot confer write privileges.
+- Explicitly imports and assigns Keycloak's basic subject mapper for human tokens, preventing successful OAuth login followed by unauthorized MCP discovery; signed tokens without a subject remain rejected.
+- Adds MCP-only operation without REST credentials, reviewed retirement/rollback instructions, a reusable skill, a technology-style icon and updated workflow illustrations.
+- Retains non-root/read-only Docker hardening and exact Home Assistant authorization policy. Real NAS and ChatGPT acceptance preceded release preparation.
 
 ## v0.6.0 — Diagnostics and forensic observability
 

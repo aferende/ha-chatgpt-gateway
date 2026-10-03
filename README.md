@@ -1,470 +1,177 @@
-# HA ChatGPT Gateway
+# Home Assistant ChatGPT Gateway Plugin
 
-Self-hosted Docker gateway that lets a personal ChatGPT GPT Action securely access and control a Home Assistant instance through a small, policy-enforced REST API.
+![Home Assistant ChatGPT Gateway Plugin icon](assets/plugin-icon-256.png)
 
-The gateway is designed to run on a NAS, mini PC, Raspberry Pi, VPS, or any Docker host. It does **not** use the OpenAI API and does **not** require an OpenAI API key.
+**An open-source, self-hosted gateway for discovering, monitoring and controlling Home Assistant from a personal ChatGPT plugin. No OpenAI API key required.**
+
+Run it on a NAS, mini PC, Raspberry Pi, Linux server or other Docker host. ChatGPT connects through HTTPS and Keycloak OAuth; the gateway applies explicit policy before communicating with Home Assistant.
+
+**The Home Assistant token stays exclusively on your gateway host.** It is never entered into ChatGPT, the plugin manifest or an MCP request. Tool results are sent to ChatGPT for inference: self-hosting the gateway does not make the model local.
+
+## Breaking change: v0.6.0 → v0.7.0
+
+The main integration changes from **custom GPT + OpenAPI Action + gateway API key** to **personal plugin + MCP + Keycloak OAuth**. Existing GPT Actions, their API keys and their OpenAPI schema do not become a plugin automatically.
+
+- New plugin installations use Keycloak and the `/mcp` endpoint.
+- The supplied environment example uses `ENABLE_LEGACY_REST_API=false`. In that mode `/api/v1/*` and `/openapi.json` are absent; gateway API keys are unnecessary.
+- Existing REST installations remain compatible when `ENABLE_LEGACY_REST_API=true`, which is the runtime default for older environment files. REST still requires strong, distinct API keys.
+- Migrate instructions into the supplied skill, create the MCP connection, authenticate, and test before retiring an Action or revoking its credentials.
+- Keep the Keycloak database volume: deleting it loses users, clients and sessions.
+
+OpenAI schedules custom GPT retirement for **December 11, 2026**, with **February 11, 2027** only for eligible Enterprise workspaces with approved deferral. Follow account-specific notices and the [official OpenAI FAQ](https://help.openai.com/en/articles/20001519-custom-gpt-retirement-and-migration-faq).
+
+See the [migration and Keycloak guide](docs/plugin-migration.md).
 
 ## Architecture
 
 ```text
-ChatGPT GPT Action
-        |
-        | HTTPS + Gateway API key
-        v
-HA ChatGPT Gateway
-        |
-        | Home Assistant Long-Lived Access Token
-        v
-Home Assistant REST API
+ChatGPT plugin ── login + PKCE ──> Keycloak + PostgreSQL
+      |
+      | HTTPS + short-lived OAuth access token
+      v
+Self-hosted gateway ── policy enforcement ──> Home Assistant on the LAN
+      |
+      └── Home Assistant token remains on this host
 ```
 
-## See it in action
+Keycloak authenticates the user; it is not a transparent proxy for Home Assistant traffic. Subsequent MCP tool calls go directly to the gateway.
 
-These illustrative examples show the progression from one safe device command to coordinated controls and evidence-based analysis. The gateway always applies the configured Home Assistant policy; actual capabilities depend on the entity, the available Home Assistant services, and the allowed domains/entities.
+## What it can do
 
-### 1. Simple, confirmed control
+- Discover permitted entities, states, devices and areas.
+- Find live Home Assistant services and their parameter contracts.
+- Control explicit single or multiple entities with structured parameters.
+- Validate an entire ordered batch before the first write.
+- Read bounded sensor history and redacted automation configuration.
+- Dispatch long automations/scripts asynchronously and check their status.
+- Offer opt-in, allowlisted administration and optional diagnostics/logbook.
+- Enforce read/write roles, read-only mode, domain/entity policy, target resolution and rate limits.
+- Retain optional REST/OpenAPI compatibility for existing clients.
 
-[![A GPT Action safely turns on a living-room light through a protected gateway.](assets/example-simple-control.png)](assets/example-simple-control.png)
+Services remain generic and are discovered from Home Assistant. Actual capabilities depend on the integration, entity and policy; unsupported/global targets remain blocked.
 
-### 2. Coordinated room comfort
+## Illustrative workflows
 
-[![A GPT Action coordinates a bedroom thermostat, fan, and dimmed lamp through a protected gateway.](assets/example-room-comfort.png)](assets/example-room-comfort.png)
+These are stylized English examples, not screenshots or measurements from a real home.
 
-### 3. Evidence-based energy analysis
+### 1. Secure everyday control
 
-[![A GPT Action analyses selected Home Assistant energy history and automation data through a protected gateway.](assets/example-energy-analysis.png)](assets/example-energy-analysis.png)
+[![Plugin discovery and verified light control through Keycloak OAuth and a self-hosted gateway.](assets/plugin-flow-control.png)](assets/plugin-flow-control.png)
 
-On mobile, tap an image to open it at full resolution.
+Login is handled by Keycloak; the Home Assistant credential remains local. Lamps represented as switches can be discovered too.
 
-## Features
+### 2. Coordinated multi-device control
 
-- Node.js 22.12+ with TypeScript and Fastify
-- Zod validation
-- OpenAPI 3.1 schema suitable for GPT Actions
-- Home Assistant state and service discovery
-- Live per-service contracts with fields, examples, and selectors from Home Assistant
-- Area and device discovery scoped to allowed entities
-- Optional bounded Home Assistant logbook access for troubleshooting
-- Optional isolated diagnostics companion for bounded Home Assistant Core warning/error logs
-- Privacy-preserving request audit with pseudonymous client/peer fingerprints
-- Correlated server-generated request IDs across the gateway and Diagnostics companion
-- Separate bounded failed-authentication, authenticated, and service-call rate limits
-- GPT Action-friendly generic service calls and controlled multi-step batches
-- Domain and entity allow-lists
-- Optional read-only mode
-- Separate gateway and Home Assistant credentials
-- Docker / Docker Compose deployment
-- Multi-stage, non-root container
-- GitHub Actions for CI and GHCR publishing
-- Vitest, ESLint, and Prettier
+[![Discover capabilities, validate explicit targets and execute a climate-control batch.](assets/plugin-flow-batch.png)](assets/plugin-flow-batch.png)
 
-## Safe first deployment
+Discover each device's supported modes before applying compatible parameters. A batch stops on failure and cannot roll back already completed Home Assistant operations.
 
-Treat the first deployment as a discovery-only session. Do **not** begin by exposing every Home Assistant domain or every entity that happens to be a light or switch. Start in read-only mode with a small domain set, inspect the returned entities, then create an exact allow-list containing only harmless devices that you are comfortable letting ChatGPT control.
+### 3. Evidence-based energy insights
 
-Good initial candidates are a test lamp, a desk lamp, or a non-critical smart plug. Do not start with door locks, alarms, garage/gate covers, heating controls, security scripts, appliances, or a plug that powers networking, storage, or medical equipment.
+[![Combine energy sensors, bounded history and automation configuration to compare daily energy use.](assets/plugin-flow-energy.png)](assets/plugin-flow-energy.png)
 
-## Quick start
+Compare actual recorded kWh across comparable periods. Missing or sampled data must be disclosed; the illustrations contain no live data or energy recommendation.
 
-```bash
+## Install with Docker Compose
+
+Requires Docker Engine 24+, Compose 2.20+ and a ChatGPT account that permits custom MCP plugins. Images support amd64 and arm64.
+
+```sh
 git clone https://github.com/aferende/ha-chatgpt-gateway.git
 cd ha-chatgpt-gateway
 cp .env.example .env
+cp .env.keycloak.example .env.keycloak
+chmod 600 .env .env.keycloak
 ```
 
-Edit `.env` and set at least:
+Edit both private files. In `.env`, set the LAN Home Assistant URL/token and your HTTPS gateway hostname. Keep `READ_ONLY=true` and a small set of safe domains for discovery. In `.env.keycloak`, generate independent administrator/database passwords and configure the provider HTTPS URL.
 
-```env
-HOME_ASSISTANT_URL=http://homeassistant.local:8123
-HOME_ASSISTANT_TOKEN=your_home_assistant_long_lived_token
-# Generate each value separately: openssl rand -hex 32
-# Preferred: separate credentials. Give the GPT only the write key.
-GATEWAY_READ_API_KEY=paste_a_distinct_openssl_rand_hex_32_output_here
-GATEWAY_WRITE_API_KEY=paste_a_different_openssl_rand_hex_32_output_here
-# Legacy alternative (read/write): GATEWAY_API_KEY=use_a_long_random_secret
+For guided startup use `sh scripts/install-compose.sh` on Linux/NAS, or `./scripts/install-compose.ps1` in PowerShell. Add `--build` (shell) or `-Build` (PowerShell) for a source build. These helpers validate the private files without printing secrets, then start the combined stack. They do not replace HTTPS configuration or OAuth bootstrap.
 
-# Discovery phase: read only; expose only the two low-risk domains.
-ALLOWED_DOMAINS=light,switch
-ALLOWED_ENTITIES=
-READ_ONLY=true
+The files are separate so the gateway never receives Keycloak administrator or database passwords.
+
+```sh
+docker compose --env-file .env --env-file .env.keycloak \
+  -f docker-compose.ghcr.yml -f docker-compose.oauth.yml \
+  --profile oauth pull
+
+docker compose --env-file .env --env-file .env.keycloak \
+  -f docker-compose.ghcr.yml -f docker-compose.oauth.yml \
+  --profile oauth up -d
 ```
 
-Start with a local build:
+For a source build, replace `docker-compose.ghcr.yml` with `docker-compose.yml` and use `up -d --build`.
 
-```bash
-docker compose up -d --build
-```
+Configure your HTTPS reverse proxy, then bootstrap the dedicated Keycloak realm/client/user using the [complete setup guide](docs/plugin-migration.md). The Keycloak administrator and master realm stay local. The provider's user-facing realm and login assets are proxied over HTTPS.
 
-Or, when the GHCR image is available:
+For standalone `docker run`, provider deployment and NAS examples, see [Docker installation](docs/docker.md), [NAS deployment](docs/nas-docker.md) and [reverse proxy](docs/reverse-proxy.md). Never forward Home Assistant port 8123 or raw gateway HTTP port 8787 from the Internet.
 
-```bash
-docker compose -f docker-compose.ghcr.yml pull
-docker compose -f docker-compose.ghcr.yml up -d
-```
+## Connect the personal plugin
 
-Check the service:
+1. Enable ChatGPT developer mode when required by your account.
+2. Add a custom MCP connection named **Home Assistant ChatGPT Gateway Plugin**.
+3. Use `https://gateway.example.com/mcp` and OAuth with the preregistered `ha-chatgpt` client.
+4. Enter the generated Client Secret directly in OAuth settings, never in chat.
+5. Use the exact callback shown by ChatGPT; no wildcard redirects.
+6. Sign in to Keycloak and replace the temporary owner password.
+7. Connect and test tools, then package/install the supplied skill with your own registered app ID.
 
-```bash
-curl http://localhost:8787/health
-```
+ChatGPT may request `openid offline_access read write`. Bootstrap configures offline access and the standard subject claim required by the gateway.
 
-While `READ_ONLY=true`, use `GET /api/v1/entities` to identify one to three safe entity IDs. Replace the empty `ALLOWED_ENTITIES` value with those exact IDs, restart the container, and verify reads again. `READ_ONLY=false` refuses to start unless `ALLOWED_ENTITIES` is non-empty.
+A ZIP exported from a newly created connection may contain only its manifest and app mapping, not the skill. See [plugin setup](docs/plugin-migration.md#install-and-connect-the-plugin) and the [Wiki](https://github.com/aferende/ha-chatgpt-gateway/wiki).
 
-## Configuration
+## Start with safe devices
 
-All runtime configuration is provided through environment variables.
+Use a short, reviewed allowlist before enabling writes:
 
-### Connection
-
-- `PORT` — default: `8787`. HTTP port used inside the container.
-- `HOME_ASSISTANT_URL` — required. Home Assistant base URL.
-- `HOME_ASSISTANT_TOKEN` — required. Home Assistant Long-Lived Access Token.
-- `HOME_ASSISTANT_TIMEOUT_MS` — default: `10000`. Timeout in milliseconds for reads, discovery, and internal WebSocket registry requests.
-- `HOME_ASSISTANT_SERVICE_TIMEOUT_MS` — default: `30000`. Timeout for a normal synchronous Home Assistant service call.
-- `ENABLE_ASYNC_SERVICE_DISPATCH` — default: `false`. Enables prompt `202` responses for long-running, entity-targeted service domains.
-- `ASYNC_SERVICE_DOMAINS` — required when asynchronous dispatch is enabled. A subset of `ALLOWED_DOMAINS`, for example `automation,script`.
-- `HOME_ASSISTANT_ASYNC_SERVICE_TIMEOUT_MS` — default: `1800000`. Background-request timeout; keep it longer than the longest expected automation.
-- `ASYNC_SERVICE_MAX_CONCURRENT` — default: `2`. Maximum concurrently running background service requests.
-
-### Gateway credentials
-
-- Every configured gateway key must be a distinct, exactly 64-character hexadecimal value. Generate each independently with `openssl rand -hex 32`; this supplies 32 random bytes (256-bit nominal entropy).
-- `GATEWAY_API_KEY` — backward-compatible read/write key. Configure this key or at least one scoped key.
-- `GATEWAY_READ_API_KEY` — optional read-only key for discovery and monitoring clients.
-- `GATEWAY_WRITE_API_KEY` — optional read/write key for the GPT Action. Do not reuse the read key or a legacy key.
-
-### Policy
-
-- `ALLOWED_DOMAINS` — required. Comma-separated Home Assistant domains exposed by the gateway.
-- `ALLOWED_ENTITIES` — default: empty only while `READ_ONLY=true`. Exact comma-separated entity allow-list. The gateway refuses to start with `READ_ONLY=false` and an empty value.
-- `READ_ONLY` — default: `false`. When `true`, blocks service calls while keeping read operations available.
-- `ENABLE_LOGBOOK` — default: `false`. Opt-in access to bounded Home Assistant logbook events. Returned entries are filtered by the existing domain/entity policy; state values are omitted by default.
-- `ENABLE_ERROR_LOGS` — default: `false`. Registers the bounded error-log route only when the separate diagnostics companion is configured.
-- `DIAGNOSTICS_ADDON_URL` — required when error logs are enabled. Fixed HTTP(S) base URL of the companion on a trusted LAN or private overlay, for example `http://homeassistant.local:8099`. Public Internet endpoints, Tailscale Funnel, router forwarding, credentials/userinfo, query strings, and fragments are not supported. Structural validation cannot prove that a hostname is private; the administrator must ensure the target is private and trusted.
-- `DIAGNOSTICS_ADDON_TOKEN` — required when error logs are enabled. A distinct 64-character hexadecimal bearer token shared only with the companion.
-- `ENABLE_ADMIN_ACTIONS` — default: `false`. Enables the separate, exact allow-list of target-less maintenance actions.
-- `ADMIN_ALLOWED_ACTIONS` — required when administration actions are enabled. Supported values are `homeassistant.check_config`, `homeassistant.reload_all`, `homeassistant.reload_core_config`, `homeassistant.reload_custom_templates`, `homeassistant.restart`, `automation.reload`, `scene.reload`, and `script.reload`.
-
-### Logging and rate limits
-
-- `LOG_LEVEL` — default: `info`. Fastify/Pino log level.
-- `AUDIT_LOG_ENABLED` — default: `true`. Emits one structured, data-minimized completion event per protected request.
-- `AUDIT_HMAC_KEY` — optional independent 64-hex key for stable IP pseudonyms. If empty, a random process-local key is generated and fingerprints change after restart. Never derive it from an API key.
-- `AUDIT_LOG_RAW_IPS` — default: `false`. Adds raw client/peer IPs only when explicitly enabled for a time-bounded incident; this increases personal-data exposure.
-- `RATE_LIMIT_MAX` — default: `120`. Applied separately to failed authentication per resolved client IP and authenticated work per credential ID plus resolved client IP; `0` disables both process-local limiters.
-- `RATE_LIMIT_WINDOW_MS` — default: `60000`. Rate-limit window in milliseconds.
-- `SERVICE_RATE_LIMIT_MAX` — default: `20`. Stricter service-call limit per authenticated key and source IP; `0` disables it.
-- `SERVICE_RATE_LIMIT_WINDOW_MS` — default: `60000`. Service-call rate-limit window in milliseconds.
-- `TRUSTED_PROXIES` — default: empty (trust nobody). Comma-separated reverse-proxy peer IPs or CIDRs allowed to supply forwarding headers. Configure it only after verifying the peer address seen by the container; this preserves independent client rate-limit buckets behind a proxy without trusting headers sent directly by Internet clients.
-
-Rate-limit maps are bounded and reset on process restart. Failed authentication cannot consume an authenticated credential's quota. A shared proxy IP can still cause clients to share the failed-auth bucket when `TRUSTED_PROXIES` is absent or incorrect. See [Forensic observability](docs/forensic-observability.md) for fields, privacy, incident handling, and limitations.
-
-See `.env.example` for the complete template. An empty `ALLOWED_ENTITIES` value is appropriate only for a short, read-only discovery phase. A non-empty allow-list also prevents newly added Home Assistant entities from becoming available automatically.
-
-## Public API
-
-The initial API surface is intentionally smaller than Home Assistant's API. The gateway is **not** a transparent reverse proxy.
-
-```text
-GET  /health
-GET  /openapi.json
-
-GET  /api/v1/config
-GET  /api/v1/diagnostics
-GET  /api/v1/logbook              # only when ENABLE_LOGBOOK=true
-GET  /api/v1/logs/errors           # only when ENABLE_ERROR_LOGS=true
-GET  /api/v1/services
-GET  /api/v1/services/{domain}/{service}
-GET  /api/v1/areas
-GET  /api/v1/devices
-
-GET  /api/v1/entities
-GET  /api/v1/entities/{entityId}
-GET  /api/v1/entities/{entityId}/state
-GET  /api/v1/entities/{entityId}/history
-GET  /api/v1/automations/{entityId}
-
-POST /api/v1/services/call
-POST /api/v1/services/batch
-GET  /api/v1/service-dispatches/{dispatchId}
-POST /api/v1/admin/actions/call
-```
-
-All `/api/v1/*` endpoints require a configured gateway credential:
-
-```http
-Authorization: Bearer <GATEWAY_WRITE_API_KEY-or-GATEWAY_API_KEY>
-```
-
-`/health` and `/openapi.json` are public so that infrastructure health checks and GPT Action schema import work without exposing Home Assistant credentials.
-
-## Calling Home Assistant services
-
-With `READ_ONLY=false`, the gateway can invoke services belonging to allowed domains.
-
-Example:
-
-```http
-POST /api/v1/services/call
-Authorization: Bearer <GATEWAY_WRITE_API_KEY-or-GATEWAY_API_KEY>
-Content-Type: application/json
-```
-
-```json
-{
-  "domain": "light",
-  "service": "turn_on",
-  "entity_id": ["light.living_room"],
-  "data": {
-    "brightness_pct": 50
-  }
-}
-```
-
-For GPT Actions, use `data`: it is a structured JSON object with the dynamic service parameters returned by `GET /api/v1/services/{domain}/{service}`. This lets an Action supply values such as `hvac_mode`, `temperature`, `fan_mode`, brightness, colour, position, or integration-specific fields. `data_json` remains supported as a legacy JSON-object-encoded string for existing clients, but Actions should prefer `data` and must not send both fields.
-
-For a request that requires several Home Assistant services, use one short, ordered batch. For example, an HVAC request can set mode, temperature, and fan mode without inventing a climate-specific gateway endpoint:
-
-```json
-{
-  "calls": [
-    {
-      "domain": "climate",
-      "service": "set_hvac_mode",
-      "entity_id": ["climate.bedroom_air_conditioner"],
-      "data": { "hvac_mode": "cool" }
-    },
-    {
-      "domain": "climate",
-      "service": "set_temperature",
-      "entity_id": ["climate.bedroom_air_conditioner"],
-      "data": { "temperature": 27 }
-    },
-    {
-      "domain": "climate",
-      "service": "set_fan_mode",
-      "entity_id": ["climate.bedroom_air_conditioner"],
-      "data": { "fan_mode": "medium" }
-    }
-  ]
-}
-```
-
-All calls in a batch are validated before its first write. They then run sequentially and stop on the first Home Assistant error. A batch is not transactional: Home Assistant has no generic rollback facility, so a completed earlier call is not undone.
-
-Every target entity must pass the configured policy. Before a write, group-like entities are resolved recursively into concrete entity IDs; if any resolved member is disallowed, cyclic, malformed, too numerous, or from another domain, the entire call is rejected before Home Assistant receives a service request. Domain-wide service calls, `device_id`, `area_id`, `label_id`, and target-less/global calls remain deliberately refused.
-
-The service name and its parameters are never hard-coded in the gateway. `/api/v1/services` discovers allowed services from Home Assistant, and `/api/v1/services/{domain}/{service}` returns the live contract for one selected service. Use the documented `entity_id` array and structured `data` object for GPT Actions. A single call can target several compatible allowed entities; when a request needs different services, use an ordered batch. Entity-valued fields advertised by a service contract (for example a TTS media-player field or media-player group members) are also checked against the domain/entity policy. For Home Assistant services that require response data, such as forecasts or calendar queries, the gateway automatically requests the required response. Legacy REST clients may continue to use `target.entity_id` or `data_json`.
-
-When `ENABLE_ASYNC_SERVICE_DISPATCH=true`, an individual call in `ASYNC_SERVICE_DOMAINS` returns `202` with a dispatch ID immediately instead of waiting for a long-running action. Query `GET /api/v1/service-dispatches/{dispatchId}` for its eventual gateway-side completion status. `202` means the gateway started the request; it is not a claim that the Home Assistant action has completed. Batches cannot contain asynchronous domains.
-
-Services with no entity target published by Home Assistant remain unavailable, except for the narrow opt-in administration endpoint below. This deliberately excludes broad or global operations even if Home Assistant itself would accept them.
-
-## Home Assistant maintenance actions
-
-Target-less maintenance actions are disabled by default. To enable only reviewed operations, set both variables explicitly:
-
-```env
-ENABLE_ADMIN_ACTIONS=true
-ADMIN_ALLOWED_ACTIONS=homeassistant.check_config,homeassistant.reload_all,homeassistant.restart,automation.reload,scene.reload,script.reload
-```
-
-Then use `POST /api/v1/admin/actions/call` with an exact listed `domain` and `service`, for example `{"domain":"homeassistant","service":"restart"}`. The endpoint still requires a write-capable key, obeys `READ_ONLY`, uses the service rate limit, and rejects every unlisted action. It intentionally does not permit `homeassistant.stop`, target-less turn-on/off operations, or arbitrary global Home Assistant calls.
-
-## History and automation analysis
-
-The gateway exposes bounded, read-only analysis endpoints without becoming a general Home Assistant proxy:
-
-- `GET /api/v1/entities/{entityId}/history` returns minimal state history for one allowed entity. Pass an ISO-8601 `start_time` and optional `end_time`; the interval is limited to 31 days, attributes are omitted, and responses are evenly sampled to 1,000 points by default (up to 5,000).
-- `GET /api/v1/automations/{entityId}` returns the configuration of one allowed `automation.*` entity. It redacts values whose keys indicate tokens, passwords, API keys, Authorization data, secrets, or webhooks.
-
-To analyse an appliance's consumption, add its specific energy and power sensor IDs to `ALLOWED_ENTITIES` and permit the `sensor` domain. To inspect its schedule, add only the related `automation.*` IDs and permit `automation`. These endpoints are read-only; enabling a domain does not bypass the entity allow-list for service calls.
-
-In a URL, percent-encode the `+` in positive UTC offsets as `%2B`, for example `2026-09-15T07:40:00%2B02:00`. The gateway also tolerates a raw `+` for these two timestamp fields because form-style query parsing otherwise turns it into a space. `Z`, `+00:00`, positive offsets, and negative offsets are normalized to UTC after validation.
-
-## Logbook troubleshooting
-
-Logbook access is intentionally disabled by default. Enable it explicitly:
-
-```env
-ENABLE_LOGBOOK=true
-```
-
-Then use `GET /api/v1/logbook` with a required ISO-8601 `start_time` and optional `end_time`, `entity_id`, `limit`, and `include_state` parameters.
-
-Positive offsets should use `%2B` in serialized URLs; the same narrow raw-`+` compatibility handling as History applies only to `start_time` and `end_time`.
-
-Security properties:
-
-- requests require a normal gateway credential and use the existing protected-route rate limit;
-- unscoped requests without `entity_id` must use a positive interval of no more than 24 hours;
-- requests scoped to an allowed `entity_id` may use a positive interval of up to 7 days;
-- responses are capped at 500 allowed entries;
-- an explicitly requested `entity_id` must pass the existing gateway entity policy;
-- unscoped responses keep only entries whose `entity_id` passes the existing domain/entity policy;
-- sensitive object fields and common credential patterns are redacted as defense-in-depth only, not as the primary disclosure boundary;
-- `include_state=false` is the default so state values such as internal IP addresses or URLs are not disclosed unless explicitly requested.
-
-Example:
-
-```http
-GET /api/v1/logbook?start_time=2026-09-02T18:00:00Z&limit=100
-Authorization: Bearer <GATEWAY_READ_API_KEY-or-GATEWAY_WRITE_API_KEY>
-```
-
-Set `include_state=true` only when state values are required for the specific diagnosis. For normal entity state inspection, prefer the existing entity endpoints.
-
-## Error-log diagnostics companion
-
-Home Assistant Core logs are deliberately not fetched by the normal gateway. The optional companion app runs under Home Assistant Supervisor and exposes one authenticated operation: a bounded excerpt of recent Core warning/error records, including directly following traceback or continuation lines. It has no generic proxy, source selector, shell, Docker socket, or filesystem mount.
-
-The gateway route is absent from both runtime routing and OpenAPI unless all three settings are valid:
-
-```env
-ENABLE_ERROR_LOGS=true
-DIAGNOSTICS_ADDON_URL=http://homeassistant.local:8099
-DIAGNOSTICS_ADDON_TOKEN=<64-hex-token-shared-with-the-companion>
-```
-
-`GET /api/v1/logs/errors?lines=100` accepts `1..500`; `100` is the default. It selects warning/error/critical/fatal records and retains their bounded continuation context until a new log record begins. Every retained line is redacted and subject to line, per-line, and response-byte caps. Regex redaction cannot guarantee removal of every secret and remains defense in depth. `DIAGNOSTICS_ADDON_URL` must point only to the companion on a trusted LAN or private overlay. Public Internet endpoints, Tailscale Funnel, router forwarding, URLs containing credentials/userinfo, query strings, and fragments are not supported. The structural URL validation does not technically block every public hostname; the administrator is responsible for ensuring that the configured target is private and trusted.
-
-Installation, permissions, network guidance, threat model, and a local test procedure are in [the diagnostics companion guide](ha-chatgpt-diagnostics/DOCS.md).
-
-The gateway forwards its server-generated `X-Request-ID` to the companion so the two structured audit events can be correlated. Never expose the companion through Funnel, a router forward, or another public proxy.
-
-## Read-only mode
-
-For an initial deployment, start with:
-
-```env
-READ_ONLY=true
-```
-
-Verify authentication, entity visibility, and Home Assistant connectivity. Then enable write operations with:
-
-```env
+```dotenv
 READ_ONLY=false
+ALLOWED_DOMAINS=light,switch
+ALLOWED_ENTITIES=light.desk,switch.reading_lamp
 ```
 
-`READ_ONLY` is an application policy. It is unrelated to Docker Compose's `read_only: true`, which makes the **container filesystem** read-only as a hardening measure.
+An empty allowlist is allowed only for read-only discovery. Write mode refuses to start without explicit entities. Avoid including locks, alarms, doors, network equipment, servers or broad scripts during initial setup.
 
-## Home Assistant token
+Every explicit target and recursively resolved group member must pass policy. Read roles cannot write, even when the requested OAuth scope includes `write`. Administration is disabled by default and uses a separate exact action allowlist.
 
-Create a Home Assistant Long-Lived Access Token for the user the gateway should operate as.
+## Configuration and security
 
-The token is stored only in the gateway's environment and is sent only to Home Assistant. It must never be placed in the GPT Action configuration or committed to Git.
+All runtime configuration is environment-based. See [.env.example](.env.example), [.env.keycloak.example](.env.keycloak.example) and [configuration reference](https://github.com/aferende/ha-chatgpt-gateway/wiki/Configuration-Guide).
 
-See [docs/home-assistant.md](docs/home-assistant.md).
+- `ENABLE_MCP` and `ENABLE_LEGACY_REST_API` choose the interfaces.
+- `MCP_PUBLIC_URL`, issuer, JWKS and gateway roles define authenticated MCP access.
+- `ALLOWED_DOMAINS`, `ALLOWED_ENTITIES` and `READ_ONLY` constrain Home Assistant.
+- `TRUSTED_PROXIES` defaults to trusting nobody; select only the actual reverse-proxy peer.
+- General and write-specific limits, request IDs and redacted audit events aid troubleshooting.
+- The container runs non-root with read-only filesystem, tmpfs and no-new-privileges.
 
-## GPT Action
+[Security boundaries](docs/security.md) include token lifetime, refresh/revocation limitations and privacy. Never commit private configuration, OAuth tokens, callback query strings, personal plugin IDs or domestic addresses.
 
-After deploying the gateway behind public HTTPS, import:
+## Update and rollback
 
-```text
-https://your-gateway.example.com/openapi.json
+Back up private configuration and the Keycloak database before updates. Pull and recreate the same combined Compose stack without deleting volumes. Pin an official release tag/digest in production and retain the previously working image for rollback.
+
+Do not run global Docker prune commands on a shared NAS. After verified migration, revoke legacy credentials and remove only confirmed unused project containers/images.
+
+## Troubleshooting
+
+- `invalid_scope`: check the client's optional `offline_access` scope and authorized user's role.
+- Login succeeds but discovery fails: check the `basic` scope and `sub` mapper; reconnect for a new token.
+- Synology error page during reconnect: inspect the OAuth proxy header buffers; see the supplied [Nginx example](deploy/nginx-keycloak.conf).
+- `403`: review roles, read-only mode and entity/domain policy.
+- HTTP `202`: can acknowledge an MCP notification or a queued operation; inspect the operation result before claiming completion.
+- An unavailable entity, failed upstream call or unsupported capability must not be treated as success.
+
+## Development and assets
+
+```sh
+npm ci
+npm run check
+npm audit
 ```
 
-into the GPT Action configuration.
+The check includes Prettier, ESLint, Vitest and TypeScript. CI builds gateway and diagnostics images for amd64/arm64. Release publication and Wiki synchronization are checked independently.
 
-Configure API-key authentication using `GATEWAY_WRITE_API_KEY` (preferred) or the legacy `GATEWAY_API_KEY`, and send it as a Bearer token.
+Download the [256 px plugin icon](assets/plugin-icon-256.png) (PNG, under 10 KiB) or [512 px artwork](assets/plugin-icon.png). Artwork is illustrative and generated with ChatGPT Images. The project is independent and is not endorsed by OpenAI, Home Assistant or Keycloak.
 
-See [docs/chatgpt-action.md](docs/chatgpt-action.md).
-
-## Deployment guides
-
-- [Home Assistant token and connectivity](docs/home-assistant.md)
-- [Docker and Docker Compose installation](docs/docker.md)
-- [NAS / Synology Docker deployment example](docs/nas-docker.md)
-- [Reverse proxy, HTTPS, and router port forwarding](docs/reverse-proxy.md)
-- [ChatGPT GPT and Action configuration](docs/chatgpt-action.md)
-- [Diagnostics companion installation and threat model](ha-chatgpt-diagnostics/DOCS.md)
-- [Forensic observability, privacy, rate limits, and incident analysis](docs/forensic-observability.md)
-- [One-prompt Codex deployment assistant](docs/codex-deployment-prompt.md)
-- [Security model and safe rollout](docs/security.md)
-
-## HTTPS
-
-Do not expose port `8787` directly to the Internet unless you intentionally terminate TLS elsewhere.
-
-Place the gateway behind an HTTPS reverse proxy such as Caddy, Nginx, Nginx Proxy Manager, Traefik, a NAS reverse proxy, or an equivalent TLS ingress.
-
-When a proxy is used, configure the exact proxy peer in `TRUSTED_PROXIES` so Fastify can safely resolve the real client IP for rate limiting. Leave it empty for direct connections. Never use a universal CIDR or `trustProxy: true`.
-
-See [docs/reverse-proxy.md](docs/reverse-proxy.md).
-
-## Docker images
-
-The repository contains a GitHub Actions workflow intended to publish multi-architecture images to:
-
-```text
-ghcr.io/aferende/ha-chatgpt-gateway
-```
-
-for:
-
-```text
-linux/amd64
-linux/arm64
-```
-
-This makes deployment possible without installing Node.js or compiling TypeScript on the target NAS.
-
-## Development
-
-Requirements:
-
-- Node.js 22.12+
-- npm
-
-Install dependencies:
-
-```bash
-npm install
-```
-
-Run the checks:
-
-```bash
-npm run format:check
-npm run lint
-npm run test
-npm run build
-```
-
-Run locally:
-
-```bash
-npm run dev
-```
-
-## Security model
-
-The gateway deliberately exposes less functionality than Home Assistant itself.
-
-Important properties include:
-
-- Home Assistant token is never exposed to ChatGPT
-- separate gateway API key
-- timing-safe API-key comparison
-- domain allow-list
-- optional entity allow-list
-- explicit target entity required for state-changing service calls
-- read-only mode
-- no generic `/api/*` proxy
-- non-root container
-- read-only container filesystem
-- secrets omitted from diagnostics and logs
-- optional Core logs isolated in a separately installed, authenticated companion
-- privacy-preserving request audit with HMAC-based pseudonymous network fingerprints
-- separate bounded rate-limit buckets for failed authentication, authenticated work, and service calls
-- server-generated request IDs for cross-process diagnostics correlation
-
-See [docs/security.md](docs/security.md).
-
-## Project status
-
-`v0.6.0` adds policy-filtered Logbook access, the isolated Diagnostics companion, privacy-preserving request observability, cross-process request correlation, and independent bounded authentication/service rate-limit buckets. Positive ISO-8601 UTC offsets are handled safely, credential identities remain distinct for audit and throttling, and the runtime dependency floor includes Fastify 5.12.5.
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+MIT license. See [changelog](CHANGELOG.md), [release notes](https://github.com/aferende/ha-chatgpt-gateway/releases), [installation guide](docs/plugin-migration.md) and [Home Assistant setup](docs/home-assistant.md).

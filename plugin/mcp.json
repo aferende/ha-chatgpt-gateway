@@ -1,0 +1,9 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "home-assistant": {
+      "type": "streamable-http",
+      "url": "https://gateway.example.com/mcp"
+    }
+  }
+}

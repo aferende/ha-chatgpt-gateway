@@ -17,6 +17,7 @@ import { registerServiceRoutes } from './routes/services.js';
 import { registerSystemRoutes } from './routes/system.js';
 import { createAuthenticationHook } from './security/authentication.js';
 import { createGatewayAuditHooks } from './security/audit.js';
+import { registerMcpRoutes } from './mcp/server.js';
 import {
   createAuthenticatedRateLimitHook,
   createPreAuthRateLimitHook,
@@ -26,6 +27,7 @@ export interface BuildAppOptions {
   config: GatewayConfig;
   fetchImpl?: typeof fetch;
   webSocketFactory?: WebSocketFactory;
+  oauthFetchImpl?: typeof fetch;
   logger?: FastifyServerOptions['logger'];
 }
 
@@ -45,6 +47,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     options.webSocketFactory,
   );
   const diagnosticsClient = new DiagnosticsAddonClient(options.config, options.fetchImpl);
+  app.decorate('gatewayActions', new Map());
+  app.decorate('gatewayLegacyRestEnabled', options.config.legacyRestApiEnabled !== false);
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof DiagnosticsAddonError) {
@@ -85,12 +89,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
 
   await registerHealthRoute(app, options.config);
 
-  app.get('/openapi.json', async () =>
-    buildOpenApiSchema(options.config.publicBaseUrl, {
-      logbookEnabled: options.config.logbookEnabled,
-      errorLogsEnabled: options.config.errorLogsEnabled,
-    }),
-  );
+  if (options.config.legacyRestApiEnabled !== false)
+    app.get('/openapi.json', async () =>
+      buildOpenApiSchema(options.config.publicBaseUrl, {
+        logbookEnabled: options.config.logbookEnabled,
+        errorLogsEnabled: options.config.errorLogsEnabled,
+      }),
+    );
 
   await app.register(async (protectedApp) => {
     const audit = createGatewayAuditHooks(options.config);
@@ -107,5 +112,6 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     await registerSystemRoutes(protectedApp, options.config, client);
   });
 
+  await registerMcpRoutes(app, options.config, options.oauthFetchImpl);
   return app;
 }

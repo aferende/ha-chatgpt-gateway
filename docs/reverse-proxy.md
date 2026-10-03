@@ -1,5 +1,7 @@
 # Public HTTPS, reverse proxy, and router forwarding
 
+For v0.7.0 the public client is an MCP plugin using Keycloak OAuth. Keep the HTTPS gateway hostname, expose `/mcp` and resource metadata, and route only Keycloak's dedicated realm/login assets. Use [the Keycloak Nginx example](../deploy/nginx-keycloak.conf) for response-header buffers and privacy; keep administrator/master paths private. See [migration](plugin-migration.md). Legacy Action origin/import details below apply only with REST enabled.
+
 A ChatGPT GPT Action must reach the gateway through a public HTTPS origin. Terminate TLS at a reverse proxy and forward only to the local gateway port. Do not publish the gateway's plain HTTP Docker port or Home Assistant itself.
 
 ```text

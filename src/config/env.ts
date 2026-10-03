@@ -1,6 +1,7 @@
 import proxyaddr from '@fastify/proxy-addr';
 import { z } from 'zod';
 import { supportedAdminActions } from '../security/admin-actions.js';
+import { loadMcpConfig, type McpConfig } from '../mcp/config.js';
 
 const booleanFromString = z
   .enum(['true', 'false'])
@@ -26,10 +27,21 @@ const envSchema = z
       .url()
       .refine((value) => /^https?:\/\//i.test(value), 'HOME_ASSISTANT_URL must use HTTP or HTTPS'),
     HOME_ASSISTANT_TOKEN: z.string().min(1, 'HOME_ASSISTANT_TOKEN is required'),
+    ENABLE_LEGACY_REST_API: booleanDefaultTrueFromString,
+    ENABLE_MCP: z.enum(['true', 'false']).default('false'),
     // Legacy full-access key. Prefer the scoped keys for a new deployment.
-    GATEWAY_API_KEY: gatewayKeySchema.optional(),
-    GATEWAY_READ_API_KEY: gatewayKeySchema.optional(),
-    GATEWAY_WRITE_API_KEY: gatewayKeySchema.optional(),
+    GATEWAY_API_KEY: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      gatewayKeySchema.optional(),
+    ),
+    GATEWAY_READ_API_KEY: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      gatewayKeySchema.optional(),
+    ),
+    GATEWAY_WRITE_API_KEY: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      gatewayKeySchema.optional(),
+    ),
     ALLOWED_DOMAINS: z.string().min(1, 'ALLOWED_DOMAINS is required'),
     ALLOWED_ENTITIES: z.string().default(''),
     READ_ONLY: booleanFromString,
@@ -87,12 +99,24 @@ const envSchema = z
     PUBLIC_BASE_URL: z.string().url().optional(),
   })
   .superRefine((value, context) => {
-    if (!value.GATEWAY_API_KEY && !value.GATEWAY_READ_API_KEY && !value.GATEWAY_WRITE_API_KEY) {
+    if (
+      value.ENABLE_LEGACY_REST_API &&
+      !value.GATEWAY_API_KEY &&
+      !value.GATEWAY_READ_API_KEY &&
+      !value.GATEWAY_WRITE_API_KEY
+    ) {
       context.addIssue({
         code: 'custom',
         path: ['GATEWAY_API_KEY'],
         message:
           'Set GATEWAY_API_KEY or at least one of GATEWAY_READ_API_KEY and GATEWAY_WRITE_API_KEY.',
+      });
+    }
+    if (!value.ENABLE_LEGACY_REST_API && value.ENABLE_MCP !== 'true') {
+      context.addIssue({
+        code: 'custom',
+        path: ['ENABLE_MCP'],
+        message: 'Enable MCP when the legacy REST API is disabled.',
       });
     }
 
@@ -206,6 +230,8 @@ export interface GatewayCredential {
 }
 
 export interface GatewayConfig {
+  legacyRestApiEnabled?: boolean;
+  mcp?: McpConfig;
   port: number;
   homeAssistantUrl: string;
   homeAssistantToken: string;
@@ -271,6 +297,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig 
   addCredential('write', parsed.GATEWAY_WRITE_API_KEY, new Set(['read', 'write']));
 
   return {
+    legacyRestApiEnabled: parsed.ENABLE_LEGACY_REST_API,
+    mcp: loadMcpConfig(env),
     port: parsed.PORT,
     homeAssistantUrl: parsed.HOME_ASSISTANT_URL.replace(/\/$/, ''),
     homeAssistantToken: parsed.HOME_ASSISTANT_TOKEN,

@@ -86,6 +86,8 @@ chmod 600 .env .env.keycloak
 
 Edit both private files. In `.env`, set the LAN Home Assistant URL/token and your HTTPS gateway hostname. Keep `READ_ONLY=true` and a small set of safe domains for discovery. In `.env.keycloak`, generate independent administrator/database passwords and configure the provider HTTPS URL.
 
+For guided startup use `sh scripts/install-compose.sh` on Linux/NAS, or `./scripts/install-compose.ps1` in PowerShell. Add `--build` (shell) or `-Build` (PowerShell) for a source build. These helpers validate the private files without printing secrets, then start the combined stack. They do not replace HTTPS configuration or OAuth bootstrap.
+
 The files are separate so the gateway never receives Keycloak administrator or database passwords.
 
 ```sh

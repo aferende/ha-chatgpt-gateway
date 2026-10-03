@@ -40,6 +40,19 @@ All supported deployments use the included Keycloak/PostgreSQL stack. Synology O
 
 Copy `.env.example` to `.env` for gateway settings and `.env.keycloak.example` to `.env.keycloak` for provider settings. Restrict both files to their owner. Generate administrator/database passwords independently with `openssl rand -hex 32` (or Node's `crypto.randomBytes(32).toString('hex')`). The Keycloak file contains no Home Assistant token and must not be added to the gateway's `env_file` list.
 
+## Installation checklist and startup scripts
+
+1. Clone the release repository and prepare the two private files.
+2. Set the actual LAN Home Assistant URL/token in the gateway file, HTTPS MCP/issuer/JWKS URLs, read-only mode and a small domain policy.
+3. Set provider HTTPS URL, administrator/database passwords, exact callback and the private output path in the provider file.
+4. Start the stack with `sh scripts/install-compose.sh` or PowerShell `./scripts/install-compose.ps1`. For source builds use `--build` or `-Build`.
+5. Wait for Keycloak to start; configure the public TLS proxy and keep administration/database endpoints private.
+6. Run the bootstrap helper below. It creates the resource/client/user and saves credentials locally.
+7. Enter Client ID/Secret in the manual OAuth settings of the personal ChatGPT MCP plugin; sign in and change the temporary password.
+8. Verify tools and install the skill. Enable writes only after an explicit safe allowlist and a successful read-only test.
+
+The startup scripts create missing example files without overwriting existing settings, validate required fields, protect file permissions and use quiet Compose validation. No secret belongs in a public command example or Git commit.
+
 Start the stack with private environment values:
 
 ```sh

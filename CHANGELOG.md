@@ -16,6 +16,7 @@
 - Explicitly imports and assigns Keycloak's basic subject mapper for human tokens, preventing successful OAuth login followed by unauthorized MCP discovery; signed tokens without a subject remain rejected.
 - Adds MCP-only operation without REST credentials, reviewed retirement/rollback instructions, a reusable skill, a technology-style icon and updated workflow illustrations.
 - Retains non-root/read-only Docker hardening and exact Home Assistant authorization policy. Real NAS and ChatGPT acceptance preceded release preparation.
+- Builds TypeScript on the native builder platform to avoid ARM64 Node/QEMU failures during dependency installation; rejects native runtime addons before cross-platform packaging.
 
 ## v0.6.0 — Diagnostics and forensic observability
 

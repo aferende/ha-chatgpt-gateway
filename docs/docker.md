@@ -13,6 +13,8 @@ docker compose --env-file .env --env-file .env.keycloak \
 
 For a source build replace the GHCR file with `docker-compose.yml` and use `up -d --build`.
 
+Source builds require Docker BuildKit/buildx, which supplies `BUILDPLATFORM` automatically. The Dockerfile compiles TypeScript on the builder's native platform and packages the JavaScript-only runtime dependencies for both amd64 and arm64. It rejects native `.node` addons rather than silently copying incompatible binaries. Adding native runtime dependencies requires revisiting this build strategy. On an older NAS without buildx, prefer the published GHCR image.
+
 When Keycloak is already configured, the gateway can also run standalone:
 
 ```sh

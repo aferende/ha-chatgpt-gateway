@@ -1,4 +1,5 @@
-FROM node:22-alpine AS build
+ARG BUILDPLATFORM
+FROM --platform=$BUILDPLATFORM node:22-alpine AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
@@ -6,6 +7,8 @@ COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
 RUN npm prune --omit=dev
+# Runtime dependencies are JavaScript-only. Fail rather than cross-copy native addons.
+RUN test -z "$(find node_modules -name '*.node' -print -quit)"
 
 FROM node:22-alpine AS runtime
 LABEL org.opencontainers.image.source="https://github.com/aferende/ha-chatgpt-gateway"

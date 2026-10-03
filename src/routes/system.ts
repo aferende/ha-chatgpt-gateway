@@ -1,3 +1,4 @@
+import { registerGatewayAction } from '../http/actions.js';
 import type { FastifyInstance } from 'fastify';
 import type { GatewayConfig } from '../config/env.js';
 import type { HomeAssistantClient } from '../home-assistant/client.js';
@@ -62,7 +63,7 @@ export async function registerSystemRoutes(
   config: GatewayConfig,
   client: HomeAssistantClient,
 ): Promise<void> {
-  app.get('/api/v1/config', async () => {
+  registerGatewayAction(app, 'GET', '/api/v1/config', async () => {
     const haConfig = await client.getConfig();
     return {
       home_assistant: {
@@ -83,7 +84,7 @@ export async function registerSystemRoutes(
     };
   });
 
-  app.get('/api/v1/services', async (request, reply) => {
+  registerGatewayAction(app, 'GET', '/api/v1/services', async (request, reply) => {
     const parsedQuery = serviceQuerySchema.safeParse(request.query);
     if (!parsedQuery.success) {
       return reply.code(400).send(invalidRequest(parsedQuery.error.issues));
@@ -119,7 +120,7 @@ export async function registerSystemRoutes(
     };
   });
 
-  app.get('/api/v1/services/:domain/:service', async (request, reply) => {
+  registerGatewayAction(app, 'GET', '/api/v1/services/:domain/:service', async (request, reply) => {
     const parsedParams = serviceParamsSchema.safeParse(request.params);
     if (!parsedParams.success) {
       return reply.code(400).send(invalidRequest(parsedParams.error.issues));
@@ -145,7 +146,7 @@ export async function registerSystemRoutes(
     return { service: toServiceContract(domain, service, definition) };
   });
 
-  app.get('/api/v1/diagnostics', async () => {
+  registerGatewayAction(app, 'GET', '/api/v1/diagnostics', async () => {
     const startedAt = Date.now();
     const haConfig = await client.getConfig();
     return {
@@ -163,7 +164,7 @@ export async function registerSystemRoutes(
     };
   });
 
-  app.get('/api/v1/areas', async () => {
+  registerGatewayAction(app, 'GET', '/api/v1/areas', async () => {
     const [areas, devices, entities] = await Promise.all([
       client.getAreas(),
       client.getDevices(),
@@ -191,7 +192,7 @@ export async function registerSystemRoutes(
     };
   });
 
-  app.get('/api/v1/devices', async () => {
+  registerGatewayAction(app, 'GET', '/api/v1/devices', async () => {
     const [devices, entities] = await Promise.all([
       client.getDevices(),
       client.getEntityRegistry(),

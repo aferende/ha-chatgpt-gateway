@@ -1,3 +1,4 @@
+import { registerGatewayAction } from '../http/actions.js';
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import type { GatewayConfig } from '../config/env.js';
@@ -259,22 +260,29 @@ export async function registerServiceRoutes(
 ): Promise<void> {
   const rateLimitServiceCall = createServiceRateLimitHook(config);
   const dispatches = new Map<string, ServiceDispatch>();
+  const dispatchOwners = new Map<string, string>();
   let activeDispatches = 0;
 
   const pruneDispatches = () => {
     const expiresBefore = Date.now() - 3_600_000;
     for (const [id, dispatch] of dispatches) {
-      if (dispatch.completedAt && Date.parse(dispatch.completedAt) < expiresBefore)
+      if (dispatch.completedAt && Date.parse(dispatch.completedAt) < expiresBefore) {
         dispatches.delete(id);
+        dispatchOwners.delete(id);
+      }
     }
     while (dispatches.size >= 100) {
       const completed = [...dispatches.values()].find((dispatch) => Boolean(dispatch.completedAt));
       if (!completed) break;
       dispatches.delete(completed.id);
+      dispatchOwners.delete(completed.id);
     }
   };
 
-  const dispatchServiceCall = (call: PreparedServiceCall): ServiceDispatch | undefined => {
+  const dispatchServiceCall = (
+    call: PreparedServiceCall,
+    owner: string,
+  ): ServiceDispatch | undefined => {
     pruneDispatches();
     if (activeDispatches >= config.asyncServiceMaxConcurrent) return undefined;
 
@@ -284,6 +292,7 @@ export async function registerServiceRoutes(
       createdAt: new Date().toISOString(),
     };
     dispatches.set(dispatch.id, dispatch);
+    dispatchOwners.set(dispatch.id, owner);
     activeDispatches += 1;
     void client
       .callService(call, config.homeAssistantAsyncServiceTimeoutMs)
@@ -306,7 +315,7 @@ export async function registerServiceRoutes(
     return dispatch;
   };
 
-  app.post('/api/v1/services/call', async (request, reply) => {
+  registerGatewayAction(app, 'POST', '/api/v1/services/call', async (request, reply) => {
     if (!hasGatewayScope(request, 'write')) {
       return reply.code(403).send({
         error: 'forbidden',
@@ -339,7 +348,10 @@ export async function registerServiceRoutes(
       config.asyncServiceDispatchEnabled &&
       config.asyncServiceDomains.has(prepared.call.domain)
     ) {
-      const dispatch = dispatchServiceCall(prepared.call);
+      const dispatch = dispatchServiceCall(
+        prepared.call,
+        request.gatewayAuth?.credentialIds.join(',') ?? '',
+      );
       if (!dispatch) {
         return reply.code(429).send({
           error: 'rate_limited',
@@ -353,7 +365,7 @@ export async function registerServiceRoutes(
     return { ok: true, result };
   });
 
-  app.post('/api/v1/services/batch', async (request, reply) => {
+  registerGatewayAction(app, 'POST', '/api/v1/services/batch', async (request, reply) => {
     if (!hasGatewayScope(request, 'write')) {
       return reply.code(403).send({
         error: 'forbidden',
@@ -409,24 +421,32 @@ export async function registerServiceRoutes(
     return { ok: true, results };
   });
 
-  app.get('/api/v1/service-dispatches/:dispatchId', async (request, reply) => {
-    if (!hasGatewayScope(request, 'write')) {
-      return reply.code(403).send({
-        error: 'forbidden',
-        message: 'This gateway API key does not have write scope.',
-      });
-    }
-    const dispatchId = (request.params as { dispatchId?: string }).dispatchId;
-    const dispatch = dispatchId ? dispatches.get(dispatchId) : undefined;
-    if (!dispatch) {
-      return reply
-        .code(404)
-        .send({ error: 'not_found', message: 'Service dispatch was not found.' });
-    }
-    return { dispatch };
-  });
+  registerGatewayAction(
+    app,
+    'GET',
+    '/api/v1/service-dispatches/:dispatchId',
+    async (request, reply) => {
+      if (!hasGatewayScope(request, 'write')) {
+        return reply.code(403).send({
+          error: 'forbidden',
+          message: 'This gateway API key does not have write scope.',
+        });
+      }
+      const dispatchId = (request.params as { dispatchId?: string }).dispatchId;
+      const dispatch = dispatchId ? dispatches.get(dispatchId) : undefined;
+      if (
+        !dispatch ||
+        dispatchOwners.get(dispatch.id) !== request.gatewayAuth?.credentialIds.join(',')
+      ) {
+        return reply
+          .code(404)
+          .send({ error: 'not_found', message: 'Service dispatch was not found.' });
+      }
+      return { dispatch };
+    },
+  );
 
-  app.post('/api/v1/admin/actions/call', async (request, reply) => {
+  registerGatewayAction(app, 'POST', '/api/v1/admin/actions/call', async (request, reply) => {
     if (!hasGatewayScope(request, 'write')) {
       return reply.code(403).send({
         error: 'forbidden',

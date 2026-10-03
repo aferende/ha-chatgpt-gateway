@@ -14,6 +14,23 @@ function strongKey(): string {
 }
 
 describe('configuration', () => {
+  it('permits MCP-only operation without legacy API keys', () => {
+    const config = loadConfig({
+      ...commonEnv,
+      ENABLE_LEGACY_REST_API: 'false',
+      ENABLE_MCP: 'true',
+      MCP_PUBLIC_URL: 'https://gateway.example.com/mcp',
+      MCP_OAUTH_ISSUER: 'https://gateway.example.com/oauth/realms/home-assistant',
+      MCP_OAUTH_JWKS_URL:
+        'https://gateway.example.com/oauth/realms/home-assistant/protocol/openid-connect/certs',
+    });
+    expect(config.legacyRestApiEnabled).toBe(false);
+    expect(config.gatewayCredentials).toEqual([]);
+  });
+  it('rejects configurations with no interface and keeps REST credentials mandatory when enabled', () => {
+    expect(() => loadConfig({ ...commonEnv, ENABLE_LEGACY_REST_API: 'false' })).toThrow();
+    expect(() => loadConfig(commonEnv)).toThrow();
+  });
   it('supports separate read and write API keys without a legacy full-access key', () => {
     const readKey = strongKey();
     const writeKey = strongKey();

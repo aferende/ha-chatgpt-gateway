@@ -1,3 +1,4 @@
+import { registerGatewayAction } from '../http/actions.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { GatewayConfig } from '../config/env.js';
@@ -33,7 +34,7 @@ export async function registerLogbookRoutes(
   client: HomeAssistantClient,
 ): Promise<void> {
   if (config.logbookEnabled) {
-    app.get('/api/v1/logbook', async (request, reply) => {
+    registerGatewayAction(app, 'GET', '/api/v1/logbook', async (request, reply) => {
       const queryResult = logbookQuerySchema.safeParse(request.query);
       if (!queryResult.success) {
         return reply.code(400).send(invalidRequest(queryResult.error.issues));

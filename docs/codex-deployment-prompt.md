@@ -1,51 +1,52 @@
 # One-prompt Codex deployment assistant
 
-The following prompt is for users of the Codex desktop app on Windows or Linux. Edit the values in the **User configuration** block before sending it. Keep the actual Home Assistant token, SSH password, private key, and gateway API key out of Git; provide them only when Codex asks for the local deployment values.
-
-Codex can inspect and configure a host you own, but it cannot configure the router without your access to the router UI. It should report the exact port-forward rule you must create and wait for you to confirm it.
+For Codex on Windows or Linux. Edit the non-secret configuration at the top. Supply credentials through private host files or secure environment values, never in a public repository or report.
 
 ```text
-Deploy and configure the public repository aferende/ha-chatgpt-gateway for my personal Home Assistant and ChatGPT GPT Action.
+USER_CONFIGURATION
+REPOSITORY=https://github.com/aferende/ha-chatgpt-gateway
+VERSION=v0.7.0
+DEPLOYMENT_HOST=<your Docker host or NAS>
+DEPLOYMENT_DIRECTORY=<your project directory>
+PUBLIC_GATEWAY_URL=https://gateway.example.com
+HOME_ASSISTANT_URL=http://homeassistant.local:8123
+SAFE_DOMAINS=light,switch
+SAFE_ENTITIES=<reviewed harmless entities>
+END_CONFIGURATION
 
-## User configuration — edit these values before proceeding
-REPOSITORY_URL=https://github.com/aferende/ha-chatgpt-gateway.git
-DEPLOYMENT_MODE=ghcr                 # ghcr or build
-NAS_HOST=192.168.1.50
-NAS_SSH_PORT=22
-NAS_USER=admin
-NAS_PROJECT_DIR=/volume1/docker/ha-chatgpt-gateway
-HOME_ASSISTANT_URL=http://192.168.1.10:8123
-PUBLIC_GATEWAY_HOSTNAME=ha-gateway.example.com
-SAFE_ALLOWED_DOMAINS=light,switch
-SAFE_ALLOWED_ENTITIES=               # leave blank for read-only discovery; then replace with selected safe IDs
-READ_ONLY_INITIAL=true
-# Leave empty until the reverse-proxy peer seen by the container is verified.
-TRUSTED_PROXIES=
+Deploy Home Assistant ChatGPT Gateway Plugin from the specified official version.
+Inspect existing files, architecture, Docker/Compose, containers and HTTPS proxy first.
+Do not change unrelated stacks, volumes, networks or router rules.
 
-# Never commit these. Ask me for them only when needed; do not print them in logs or reports.
-HOME_ASSISTANT_TOKEN=<ask me securely>
-# Preferred: generate two distinct values with `openssl rand -hex 32` if I do not provide them.
-# Every configured gateway key must be exactly 64 hexadecimal characters.
-GATEWAY_READ_API_KEY=<optional read-only monitoring key>
-GATEWAY_WRITE_API_KEY=<GPT Action key with read/write scope>
-# Legacy alternative: GATEWAY_API_KEY=<read/write key>
-NAS_SSH_PASSWORD=<ask me securely if password authentication is used>
-NAS_SSH_PRIVATE_KEY=<ask me securely if key authentication is used>
+Use the standard Keycloak/PostgreSQL stack and MCP-only gateway.
+Separate .env from .env.keycloak; gateway containers must not receive provider
+administrator/database credentials. Keep the Home Assistant token on the gateway
+host only. Generate unique provider secrets locally and restrict file access.
+Use pinned images, non-root/read-only gateway, tmpfs and no-new-privileges.
 
-## Required outcome
-1. Clone or inspect the existing repository. Do not scaffold a replacement project.
-2. Run the project checks: npm ci, format check, lint, test, and build. Inspect the current GitHub Actions status before making deployment claims.
-3. Inspect the NAS before changing it: uname -a, id, Docker version, Docker Compose version, docker ps, docker compose ls, existing Docker directory conventions, and existing reverse-proxy infrastructure. Do not stop, remove, or modify unrelated containers, networks, volumes, or proxy routes.
-4. Deploy only this project at NAS_PROJECT_DIR. Prefer ghcr.io/aferende/ha-chatgpt-gateway:latest when DEPLOYMENT_MODE=ghcr. Create a local .env with chmod 600. Never write secrets into the repository, GitHub Actions, logs, public documentation, or the final report.
-5. Start with READ_ONLY=true, SAFE_ALLOWED_DOMAINS, and the smallest safe policy. Use entity discovery to identify harmless devices such as a test lamp. Do not initially permit locks, alarms, doors, gates, covers, security scripts, climate/heating, appliances, or infrastructure plugs.
-6. Configure or reuse an HTTPS reverse proxy at PUBLIC_GATEWAY_HOSTNAME on port 443, forwarding only to the gateway local port 8787. Set PUBLIC_BASE_URL=https://PUBLIC_GATEWAY_HOSTNAME. Before enabling proxy trust, make a harmless proxied request, inspect the gateway container's reported remote peer, and set TRUSTED_PROXIES only to that exact IP or the narrowest verified CIDR. Do not use universal trust. Do not expose Home Assistant port 8123 or plain gateway port 8787 to the Internet.
-7. If an inbound router rule is needed, do not attempt to access the router. Tell me to create TCP external 443 -> NAS_HOST internal 443, explain how to test it from an external network, and wait for my confirmation. If the ISP uses CGNAT, propose an outbound tunnel or VPS reverse proxy instead.
-8. Verify externally: HTTPS certificate, /health, /openapi.json, and that the OpenAPI servers URL equals https://PUBLIC_GATEWAY_HOSTNAME with no port suffix. Verify that no secret appears in the schema.
-9. Give me exact generic steps to create a personal ChatGPT GPT, import https://PUBLIC_GATEWAY_HOSTNAME/openapi.json, configure the gateway API key as Bearer authentication, and paste safe English GPT Instructions. Do not use or publish personal ChatGPT links.
-10. Only after I explicitly approve the selected entity IDs, update ALLOWED_ENTITIES to a non-empty explicit list, set READ_ONLY=false, restart only this Compose project, and perform one observed on/off test on a harmless device. Re-read the state afterwards.
+Configure HTTPS and exact proxy trust. Expose only the dedicated OAuth realm and
+login assets, never provider admin/master/database or Home Assistant 8123.
+If port forwarding is required, explain the TCP 443 rule and let me configure it.
+Use the documented OAuth response-header buffers and avoid raw OAuth query logs.
 
-## Safety and reporting
-- Use explicit entity IDs for all state-changing calls; never use target-less, area-wide, device-wide, or domain-wide writes.
-- Preserve all unrelated NAS resources and report any conflict before changing shared port 443 or a proxy route.
-- At the end report: repository commit, image/version, NAS architecture, project path, container status, policy domains and entity count, public health/OpenAPI URLs, TLS result, and read/write test outcome. Do not report any token, password, private key, or API key.
+Bootstrap the realm using the project helper, including basic/sub,
+offline_access, PKCE S256 and independently checked read/write roles.
+Use an exact ChatGPT callback, not a wildcard. Keep client secrets out of chat.
+
+Start READ_ONLY=true with the reviewed safe policy. Verify metadata, OAuth,
+MCP initialize/tools and actual Home Assistant reads. Guide my manual login,
+temporary-password change and consent in ChatGPT.
+Install/package the reusable skill with my verified app ID; never publish that ID.
+
+Only after reads work and a non-empty allowlist is configured, test one harmless
+write, observe it and restore the state. Do not test locks, alarms, gates,
+servers, network equipment or broad scripts.
+Back up configuration/database and retain a rollback image before replacing
+a working deployment. Remove only verified unused project artifacts afterward.
+
+Report observed successes and actual limitations. Mark unavailable checks
+NOT VERIFIED. Do not include secrets, personal URLs or private logs in a public
+report, repository, screenshot or release.
 ```
+
+See [complete setup](plugin-migration.md), [Docker](docker.md), [NAS](nas-docker.md), [security](security.md) and [migration](https://github.com/aferende/ha-chatgpt-gateway/wiki/Migrating-to-v0.7.0).

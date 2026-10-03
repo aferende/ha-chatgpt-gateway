@@ -1,3 +1,4 @@
+import { registerGatewayAction } from '../http/actions.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { GatewayConfig } from '../config/env.js';
@@ -85,7 +86,7 @@ export async function registerEntityRoutes(
   config: GatewayConfig,
   client: HomeAssistantClient,
 ): Promise<void> {
-  app.get('/api/v1/entities', async (request, reply) => {
+  registerGatewayAction(app, 'GET', '/api/v1/entities', async (request, reply) => {
     const queryResult = entityQuerySchema.safeParse(request.query);
     if (!queryResult.success) {
       return reply.code(400).send(invalidRequest(queryResult.error.issues));
@@ -114,7 +115,7 @@ export async function registerEntityRoutes(
     return { entities: entities.map(toDiscoveryEntity) };
   });
 
-  app.get('/api/v1/entities/:entityId', async (request, reply) => {
+  registerGatewayAction(app, 'GET', '/api/v1/entities/:entityId', async (request, reply) => {
     const paramsResult = entityParamsSchema.safeParse(request.params);
     if (!paramsResult.success) {
       return reply.code(400).send(invalidRequest(paramsResult.error.issues));
@@ -128,7 +129,7 @@ export async function registerEntityRoutes(
     return client.getState(entityId);
   });
 
-  app.get('/api/v1/entities/:entityId/state', async (request, reply) => {
+  registerGatewayAction(app, 'GET', '/api/v1/entities/:entityId/state', async (request, reply) => {
     const paramsResult = entityParamsSchema.safeParse(request.params);
     if (!paramsResult.success) {
       return reply.code(400).send({ error: 'invalid_request', issues: paramsResult.error.issues });
